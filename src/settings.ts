@@ -18,12 +18,12 @@ export const SettingsManager = defineStore('settings', () => {
 
     const isInitialized = ref<boolean>(false);
 
-    async function init() {
+    async function initialize() {
         try {
             logger.trace('Initializing settings manager...');
 
             logger.trace('Loading tauri store...');
-            store = await Store.load('.settings.json');
+            store = await Store.load('settings.json');
             logger.trace('Tauri store loaded successfully.');
 
             logger.trace('Loading settings...');
@@ -44,13 +44,13 @@ export const SettingsManager = defineStore('settings', () => {
             logger.trace('Settings manager initialized successfully.');
         }
         catch (error) {
-            logger.error('Failed to initialize tauri store:', error);
+            logger.error('Failed to initialize settings manager:', error);
             isInitialized.value = false;
             throw error;
         }
     }
 
-    init();
+    initialize();
 
     async function setTheme(newTheme: Theme) {
         logger.debug('New theme:', newTheme);

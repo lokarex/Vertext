@@ -1,7 +1,7 @@
 export default {
     language: {
         en: 'English',
-        zh: 'Simplified Chinese',
+        zh_CN: 'Simplified Chinese',
     },
     theme: {
         dark: 'Dark Theme',

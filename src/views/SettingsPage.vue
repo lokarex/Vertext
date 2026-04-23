@@ -36,7 +36,7 @@ const languageOptions = computed(() => [
     },
     {
         value: 'zh-CN',
-        label: t('language.zh'),
+        label: t('language.zh_CN'),
     },
 ]);
 
@@ -79,7 +79,7 @@ function handleLanguageChange(value: "en" | "zh-CN", _options: SelectOption) {
 <style scoped>
 .settings-card {
     padding: 20px 10px;
-    margin: 10% 7%;
+    margin: 5% 7%;
     width: 86%;
 }
 

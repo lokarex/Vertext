@@ -21,6 +21,8 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@vicons/fluent": "^0.13.0",
+    "@vicons/ionicons5": "^0.13.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "naive-ui": "^2.44.1",
     "typescript": "~5.6.2",

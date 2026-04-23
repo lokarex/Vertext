@@ -6,13 +6,17 @@ log.setLevel(isDev ? 'trace' : 'warn');
 
 prefix.reg(log);
 prefix.apply(log, {
-    template: '[%t] (%n):',
+    template: '[%t] %l (%n):',
+
+    timestampFormatter(date) {
+        return date.toTimeString().replace(/.*(\d{2}:\d{2}:\d{2}).*/, '$1');
+    },
     levelFormatter(level) {
         return level.toUpperCase();
     },
-    timestampFormatter(date) {
-        return date.toTimeString().replace(/.*(\d{2}:\d{2}:\d{2}).*/, '$1'); // 输出 "HH:MM:SS" 格式的时间
-    }
+    nameFormatter(name) {
+        return name || 'root';
+    },
 })
 
 export default log;
