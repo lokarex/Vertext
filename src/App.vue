@@ -5,13 +5,11 @@ import type { GlobalTheme, GlobalThemeOverrides } from 'naive-ui';
 import { SettingsManager, Theme } from '@/settings';
 import { computed } from 'vue';
 import Header from '@/components/Header.vue';
-import { RepositoriesManager } from '@/repositories';
 import { ViewsManager } from '@/views';
 import RepositoryList from '@/views/RepositoryList.vue';
 import Editor from '@/views/Editor.vue';
 
 const viewsManager = ViewsManager();
-const repositoriesManager = RepositoriesManager();
 const settingsManager = SettingsManager();
 
 const themeMap: Record<Exclude<Theme, null>, GlobalTheme> = {

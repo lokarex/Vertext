@@ -11,11 +11,11 @@ const settingsManager = SettingsManager();
 const themeOptions = computed(() => [
     {
         value: 'darkTheme',
-        label: t('theme.dark'),
+        label: t('theme.label.dark'),
     },
     {
         value: 'lightTheme',
-        label: t('theme.light'),
+        label: t('theme.label.light'),
     },
 ]);
 
@@ -32,11 +32,11 @@ function handleFontSizeChange(value: number | null) {
 const languageOptions = computed(() => [
     {
         value: 'en',
-        label: t('language.en'),
+        label: t('language.label.en'),
     },
     {
         value: 'zh-CN',
-        label: t('language.zh_CN'),
+        label: t('language.label.zh_CN'),
     },
 ]);
 
@@ -50,24 +50,24 @@ function handleLanguageChange(value: "en" | "zh-CN", _options: SelectOption) {
         <label class="settings-title">{{ $t('settings.title') }}</label>
         
         <div>
-            <label class="settings-section-title">{{ $t('settings.appearance') }}</label>
+            <label class="settings-section-title">{{ $t('settings.label.appearance') }}</label>
 
             <div class="settings-item">
-                <label class="settings-item-title">{{ $t('settings.theme') }}</label>
+                <label class="settings-item-title">{{ $t('settings.label.theme') }}</label>
                 <n-select v-model:value="settingsManager.theme" :options="themeOptions" @update-value="handleThemeChange"/>
             </div>
 
             <n-divider/>
 
             <div class="settings-item">
-                <label class="settings-item-title">{{ $t('settings.fontSize') }}</label>
+                <label class="settings-item-title">{{ $t('settings.label.fontSize') }}</label>
                 <n-input-number v-model:value="settingsManager.fontSize" size="small" @update:value="handleFontSizeChange" :min="12" :max="36"/>
             </div>
 
             <n-divider/>
 
             <div class="settings-item">
-                <label class="settings-item-title">{{ $t('settings.language') }}</label>
+                <label class="settings-item-title">{{ $t('settings.label.language') }}</label>
                 <n-select v-model:value="settingsManager.language" :options="languageOptions" @update-value="handleLanguageChange"/>
             </div>
 

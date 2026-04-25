@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { NCard, NGradientText, NButton, NDrawer, NDrawerContent, NIcon, NButtonGroup } from 'naive-ui';
-import type { DrawerPlacement } from 'naive-ui'
 import { ref } from 'vue'
 import { PanelLeftExpand16Regular,PanelRightExpand20Regular, Settings20Regular } from '@vicons/fluent'
 import { ReturnDownBackSharp } from '@vicons/ionicons5';
@@ -22,7 +21,7 @@ function closeDrawer() {
     <n-card class="header-card">
         <div class="header-content">
             <div class="header-left">
-                <n-gradient-text type="primary">Vertext</n-gradient-text>
+                <n-gradient-text type="primary" @click="viewsManager.toRepositoryList()" style="cursor: pointer">Vertext</n-gradient-text>
                 <n-button-group>
                     <n-button @click="openDrawer" class="drawer-toggle" strong secondary round>
                         <n-icon :component="PanelLeftExpand16Regular" size="24" />
@@ -59,22 +58,20 @@ function closeDrawer() {
 }
 
 .header-content {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
+    display: flex;
+    justify-content: space-between;
 }
 
 .header-left {
-    display: grid;
-    grid-template-columns: auto auto;
+    display: flex;
     align-items: center;
-    justify-content: start;
 }
 
 .drawer-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
+    
 }
 
 .drawer-toggle {

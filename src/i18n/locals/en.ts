@@ -1,17 +1,46 @@
 export default {
+    repository: {
+        title: '',
+        action: {
+            create: 'Create Repository',
+            confirm: 'Create',
+            cancel: 'Cancel',
+        },
+        label: {
+            name: 'Repository Name',
+            remoteUrl: 'Remote URL',
+            localType: 'Local Repository',
+            remoteType: 'Remote Repository',
+        },
+        message: {},
+    },
     language: {
-        en: 'English',
-        zh_CN: 'Simplified Chinese',
+        title: '',
+        action: {},
+        label: {
+            en: 'English',
+            zh_CN: 'Simplified Chinese',
+        },
+        message: {},
     },
     theme: {
-        dark: 'Dark Theme',
-        light: 'Light Theme',
+        title: '',
+        action: {},
+        label: {
+            dark: 'Dark Theme',
+            light: 'Light Theme',
+        },
+        message: {},
     },
     settings: {
-        appearance: 'Appearance',
         title: 'Settings',
-        theme: 'Theme',
-        fontSize: 'Font Size',
-        language: 'Language',
-    }
+        action: {},
+        label: {
+            appearance: 'Appearance',
+            theme: 'Theme',
+            fontSize: 'Font Size',
+            language: 'Language',
+        },
+        message: {},
+    },
 }
