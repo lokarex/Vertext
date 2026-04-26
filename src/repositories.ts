@@ -1,7 +1,8 @@
 import { defineStore } from "pinia";
+import { Store } from "@tauri-apps/plugin-store";
 import { ref } from "vue";
 import { invoke } from '@tauri-apps/api/core';
-import logger from "./utils/logger";
+import { debug, error, trace } from '@tauri-apps/plugin-log';
 
 export type RepositoryStatus = 'unconfigured' | 'unsynced' | 'synced';
 
@@ -15,31 +16,56 @@ export class Repository {
 }
 
 export const RepositoriesManager = defineStore('repositories', () => {
+    let store: Store | null = null;
+
     const repositories = ref<Repository[]>([]);
     const selectedRepository = ref<Repository | null>(null);
 
-    async function initLocalRepository(name: string) {
+    async function initialize() {
         try {
-            await invoke('init_local_repository', { name });
-            repositories.value.push({ name, status: 'unconfigured', remoteUrl: null, userName: null, password: null });
+            trace('Initializing repositories manager...');
+            store = await Store.load('repositories.json');
+            trace('Tauri store loaded successfully.');
+
+            trace('Loading repositories...');
+            repositories.value = await store?.get('repositories') as Repository[] ?? [];
+            debug(`Loaded repositories: ${JSON.stringify(repositories.value)}`);
+            trace('Repositories manager initialized successfully.');
         }
-        catch (error) {
-            logger.error('Failed to init local repository:', error);
+        catch (err) {
+            error(`Failed to initialize repositories manager: ${err}`);
         }
     }
 
-    async function cloneRemoteRepository(remoteUrl: string) {
+    initialize();
+
+    async function initLocalRepository(repoName: string) {
         try {
-            await invoke('clone_remote_repository', { remoteUrl });
-            repositories.value.push({ name: (remoteUrl.split('/').pop() || '').replace(/\.git$/, ''), status: 'unconfigured', remoteUrl, userName: null, password: null });
+            await invoke('init_local_repository', { repoName });
+            repositories.value.push({ name: repoName, status: 'unconfigured', remoteUrl: null, userName: null, password: null });
+            await store?.set('repositories', repositories.value);
+            await store?.save();
         }
-        catch (error) {
-            logger.error('Failed to clone remote repository:', error);
+        catch (err) {
+            error(`Failed to init local repository: ${err}`);
         }
     }
 
-    async function configureRepository(name: string, remoteUrl: string | null, userName: string | null, password: string | null) {
-        const repository = repositories.value.find(repo => repo.name === name)!;
+    async function cloneRemoteRepository(remoteUrl: string, repoName?: string) {
+        try {
+            const resolvedRepoName = repoName || (remoteUrl.split('/').pop() || '').replace(/\.git$/, '');
+            await invoke('clone_remote_repository', { remoteUrl, repoName: resolvedRepoName });
+            repositories.value.push({ name: resolvedRepoName, status: 'unconfigured', remoteUrl, userName: null, password: null });
+            await store?.set('repositories', repositories.value);
+            await store?.save();
+        }
+        catch (err) {
+            error(`Failed to clone remote repository: ${err}`);
+        }
+    }
+
+    async function configureRepository(repoName: string, remoteUrl: string | null, userName: string | null, password: string | null) {
+        const repository = repositories.value.find(repo => repo.name === repoName)!;
 
         repository.remoteUrl = remoteUrl || '';
         repository.userName = userName || '';
@@ -52,15 +78,20 @@ export const RepositoriesManager = defineStore('repositories', () => {
         if (remoteUrl == null || userName == null || password == null) {
             repository.status = 'unconfigured';
         }
+
+        await store?.set('repositories', repositories.value);
+        await store?.save();
     }
 
     async function deleteRepository(name: string) {
         try {
             await invoke('delete_repository', { name });
             repositories.value = repositories.value.filter(repo => repo.name !== name);
+            await store?.set('repositories', repositories.value);
+            await store?.save();
         }
-        catch (error) {
-            logger.error('Failed to delete repository:', error);
+        catch (err) {
+            error(`Failed to delete repository: ${err}`);
         }
     }
 

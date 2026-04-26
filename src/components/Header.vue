@@ -3,8 +3,10 @@ import { NCard, NGradientText, NButton, NDrawer, NDrawerContent, NIcon, NButtonG
 import { ref } from 'vue'
 import { PanelLeftExpand16Regular,PanelRightExpand20Regular, Settings20Regular } from '@vicons/fluent'
 import { ReturnDownBackSharp } from '@vicons/ionicons5';
+import { RepositoriesManager } from '@/repositories';
 import { ViewsManager } from '@/views';
 
+const repositoriesManager = RepositoriesManager();
 const viewsManager = ViewsManager();
 
 const drawerActive = ref(false)
@@ -22,8 +24,8 @@ function closeDrawer() {
         <div class="header-content">
             <div class="header-left">
                 <n-gradient-text type="primary" @click="viewsManager.toRepositoryList()" style="cursor: pointer">Vertext</n-gradient-text>
-                <n-button-group>
-                    <n-button @click="openDrawer" class="drawer-toggle" strong secondary round>
+                <n-button-group style="margin-left: 3px;">
+                    <n-button v-if="repositoriesManager.selectedRepository != null" @click="openDrawer" class="drawer-toggle" strong secondary round>
                         <n-icon :component="PanelLeftExpand16Regular" size="24" />
                     </n-button>
                     <n-button @click="viewsManager.toSettingsView()" strong secondary circle>

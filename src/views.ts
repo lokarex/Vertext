@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { Store } from '@tauri-apps/plugin-store';
-import logger from '@/utils/logger';
+import { debug, trace } from '@tauri-apps/plugin-log';
 
 export type View = 'repositoryList' | 'editor' | 'settingsView';
 
@@ -15,22 +15,22 @@ export const ViewsManager = defineStore('views', () => {
 
     async function initialize() {
         try {
-            logger.trace('Initializing views manager...');
+            trace('Initializing views manager...');
 
-            logger.trace('Loading tauri store...');
+            trace('Loading tauri store...');
             store = await Store.load('views.json');
-            logger.trace('Tauri store loaded successfully.');
+            trace('Tauri store loaded successfully.');
 
-            logger.trace('Loading selected view...');
+            trace('Loading selected view...');
             selectedView.value = await store?.get('selectedView') as View ?? 'repositoryList';
-            logger.debug('Loaded selected view:', selectedView.value);
+            debug(`Loaded selected view: ${selectedView.value}`);
             isInitialized.value = true;
-            logger.trace('Selected view loaded successfully.');
+            trace('Selected view loaded successfully.');
         }
-        catch (error) {
-            logger.error('Failed to initialize views manager:', error);
+        catch (err) {
+            trace(`Failed to initialize views manager: ${err}`);
             isInitialized.value = false;
-            throw error;
+            throw err;
         }
     }
 
@@ -41,10 +41,10 @@ export const ViewsManager = defineStore('views', () => {
             return;
         }
 
-        logger.trace('Updating previous view:', selectedView.value);
+        trace(`Updating previous view: ${selectedView.value}`);
         previousViews.value.push(selectedView.value);
 
-        logger.debug('Setting selected view to:', newView);
+        debug(`Setting selected view to: ${newView}`);
         await store?.set('selectedView', newView);
         await store?.save();
         selectedView.value = newView;
@@ -72,9 +72,9 @@ export const ViewsManager = defineStore('views', () => {
             return;
         }
         let previousView = previousViews.value.pop() as View;
-        logger.trace('The previous view is:', previousView);
+        trace(`The previous view is: ${previousView}`);
 
-        logger.trace('Restoring previous view:', previousView);
+        trace(`Restoring previous view: ${previousView}`);
         await store?.set('selectedView', previousView);
         await store?.save();
         selectedView.value = previousView;

@@ -1,7 +1,7 @@
 import { Store } from '@tauri-apps/plugin-store';
 import { ref } from 'vue';
 import { defineStore } from 'pinia';
-import logger from '@/utils/logger';
+import { debug, trace } from '@tauri-apps/plugin-log';
 import { i18n } from '@/i18n';
 import { createI18n } from 'vue-i18n';
 
@@ -20,54 +20,54 @@ export const SettingsManager = defineStore('settings', () => {
 
     async function initialize() {
         try {
-            logger.trace('Initializing settings manager...');
+            trace('Initializing settings manager...');
 
-            logger.trace('Loading tauri store...');
+            trace('Loading tauri store...');
             store = await Store.load('settings.json');
-            logger.trace('Tauri store loaded successfully.');
+            trace('Tauri store loaded successfully.');
 
-            logger.trace('Loading settings...');
+            trace('Loading settings...');
             theme.value = await store?.get('theme') as Theme ?? 'darkTheme';
-            logger.debug('Loaded theme:', theme.value);
+            debug(`Loaded theme: ${theme.value}`);
             fontSize.value = await store?.get('fontSize') as number ?? 14;
-            logger.debug('Loaded font size:', fontSize.value);
+            debug(`Loaded font size: ${fontSize.value}`);
             language.value = await store?.get('language') as Language ?? 'en';
-            logger.debug('Loaded language:', language.value);
+            debug(`Loaded language: ${language.value}`);
             isInitialized.value = true;
-            logger.trace('Settings loaded successfully.');
+            trace('Settings loaded successfully.');
 
             if (!i18nInstance) {
                 i18nInstance = i18n();
             }
             (i18nInstance.global.locale as any).value = language.value || 'en';
 
-            logger.trace('Settings manager initialized successfully.');
+            trace('Settings manager initialized successfully.');
         }
-        catch (error) {
-            logger.error('Failed to initialize settings manager:', error);
+        catch (err) {
+            trace(`Failed to initialize settings manager: ${err}`);
             isInitialized.value = false;
-            throw error;
+            throw err;
         }
     }
 
     initialize();
 
     async function setTheme(newTheme: Theme) {
-        logger.debug('New theme:', newTheme);
+        debug(`New theme: ${newTheme}`);
         await store?.set('theme', newTheme);
         await store?.save();
         theme.value = newTheme;
     }
 
     async function setFontSize(newFontSize: number) {
-        logger.debug('New font size:', newFontSize);
+        debug(`New font size: ${newFontSize}`);
         await store?.set('fontSize', newFontSize);
         await store?.save();
         fontSize.value = newFontSize;
     }
 
     async function setLanguage(newLanguage: Language) {
-        logger.debug('New language:', newLanguage);
+        debug(`New language: ${newLanguage}`);
         await store?.set('language', newLanguage);
         await store?.save();
         language.value = newLanguage;
