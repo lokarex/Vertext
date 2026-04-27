@@ -83,10 +83,10 @@ export const RepositoriesManager = defineStore('repositories', () => {
         await store?.save();
     }
 
-    async function deleteRepository(name: string) {
+    async function deleteRepository(repoName: string) {
         try {
-            await invoke('delete_repository', { name });
-            repositories.value = repositories.value.filter(repo => repo.name !== name);
+            await invoke('delete_repository', { repoName });
+            repositories.value = repositories.value.filter(repo => repo.name !== repoName);
             await store?.set('repositories', repositories.value);
             await store?.save();
         }

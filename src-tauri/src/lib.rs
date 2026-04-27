@@ -1,3 +1,4 @@
+pub mod fs;
 pub mod git;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -45,7 +46,8 @@ pub fn run() {
             greet,
             git::init_local_repository,
             git::clone_remote_repository,
-            git::delete_repository
+            git::delete_repository,
+            git::list_repository_tree
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

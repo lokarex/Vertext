@@ -1,6 +1,8 @@
-use log::{error, info, trace, warn};
+use log::{error, trace};
 use std::{path::PathBuf, sync::OnceLock};
 use tauri::Manager;
+
+use crate::fs::{read_dir_recursive, FileEntry};
 
 static REPOS_DIR: OnceLock<PathBuf> = OnceLock::new();
 
@@ -62,8 +64,23 @@ pub fn clone_remote_repository(remote_url: String, repo_name: String) -> Result<
 }
 
 #[tauri::command]
-pub fn delete_repository(name: String) -> Result<(), String> {
-    let path = repos_dir().join(&name);
+pub fn delete_repository(repo_name: String) -> Result<(), String> {
+    let path = repos_dir().join(&repo_name);
     std::fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn list_repository_tree(repo_name: String) -> Result<Vec<FileEntry>, String> {
+    trace!("Listing files for repository: {}", repo_name);
+    let path = repos_dir().join(&repo_name);
+
+    if !path.exists() {
+        error!("Repository directory does not exist: {:?}", path);
+        return Err(format!("Repository '{}' does not exist", repo_name));
+    }
+
+    let result = read_dir_recursive(&path, &path);
+    trace!("File tree for '{}': {} entries", repo_name, result.len());
+    Ok(result)
 }

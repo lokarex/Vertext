@@ -17,6 +17,11 @@ const props = withDefaults(defineProps<RepositoryCardProps>(), {
 const repositoriesManager = RepositoriesManager();
 const isSelected = computed(() => repositoriesManager.selectedRepository?.name == props.repository.name);
 const handleClick = () => {
+    if (isSelected.value) {
+        repositoriesManager.selectedRepository = null;
+        return;
+    }
+
     repositoriesManager.selectedRepository = props.repository;
 };
 
