@@ -8,7 +8,7 @@ import { createI18n } from 'vue-i18n';
 export type Theme = 'lightTheme' | 'darkTheme' | null;
 export type Language = 'en' | 'zh-CN' | null;
 
-export const SettingsManager = defineStore('settings', () => {
+export const useSettingsStore = defineStore('settings', () => {
     let store: Store | null = null;
     let i18nInstance: ReturnType<typeof createI18n> | null = null;
 

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { NCard, NIcon, NButton, NModal, NInput, NSpace, NAlert } from 'naive-ui';
+import { NCard, NIcon, NButton, NModal, NInput, NSpace, NAlert, NProgress, useMessage } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
 import { Folder24Regular, ChevronRight16Regular, ArrowSync20Regular, Settings20Regular, Delete20Regular } from '@vicons/fluent';
-import { RepositoriesManager } from '@/repositories';
-import type { Repository } from '@/repositories';
+import { useRepositoriesStore } from '@/stores/repositories';
+import type { Repository } from '@/models/Repository';
+import { listen } from '@tauri-apps/api/event';
+import { error } from '@tauri-apps/plugin-log';
 
 interface RepositoryCardProps {
     repository: Repository;
@@ -14,15 +16,15 @@ const props = withDefaults(defineProps<RepositoryCardProps>(), {
     width: '440px'
 });
 
-const repositoriesManager = RepositoriesManager();
-const isSelected = computed(() => repositoriesManager.selectedRepository?.name == props.repository.name);
+const repositoriesStore = useRepositoriesStore();
+const isSelected = computed(() => repositoriesStore.selectedRepository?.name == props.repository.name);
 const handleClick = () => {
     if (isSelected.value) {
-        repositoriesManager.selectedRepository = null;
+        repositoriesStore.selectedRepository = null;
         return;
     }
 
-    repositoriesManager.selectedRepository = props.repository;
+    repositoriesStore.selectedRepository = props.repository;
 };
 
 const { t } = useI18n();
@@ -34,6 +36,10 @@ const configRemoteUrl = ref('');
 const configUserName = ref('');
 const configPassword = ref('');
 const configErrorMessage = ref('');
+const isSyncing = ref(false);
+const syncProgress = ref(0);
+const syncStep = ref('');
+const syncError = ref('');
 
 const handleToggleExpand = () => {
     isExpanded.value = !isExpanded.value;
@@ -41,10 +47,75 @@ const handleToggleExpand = () => {
 
 const handleDelete = () => {
     showDeleteConfirmModal.value = false;
-    repositoriesManager.deleteRepository(props.repository.name);
+    repositoriesStore.deleteRepository(props.repository.name);
 };
 
-const handleSync = () => {};
+const handleSync = async () => {
+    if (isSyncing.value) return;
+
+    const repo = props.repository;
+    if (!repo.remoteUrl || !repo.userName || !repo.password) {
+        messageRef.error(t('repository.message.syncNotConfigured'));
+        return;
+    }
+
+    isSyncing.value = true;
+    syncProgress.value = 0;
+    syncStep.value = t('repository.message.syncChecking');
+    syncError.value = '';
+
+    let unlisten: (() => void) | null = null;
+    try {
+        unlisten = await listen<{ step: string; message: string }>('sync-progress', (event) => {
+            const { step, message } = event.payload;
+            syncStep.value = message;
+
+            switch (step) {
+                case 'checking':
+                    syncProgress.value = 10;
+                    break;
+                case 'committing':
+                    syncProgress.value = 30;
+                    break;
+                case 'fetching':
+                    syncProgress.value = 50;
+                    break;
+                case 'merging':
+                    syncProgress.value = 70;
+                    break;
+                case 'pushing':
+                    syncProgress.value = 90;
+                    break;
+                case 'done':
+                    syncProgress.value = 100;
+                    break;
+            }
+
+            if (step === 'done') {
+                setTimeout(() => {
+                    isSyncing.value = false;
+                    syncProgress.value = 0;
+                    syncStep.value = '';
+                    messageRef.success(t('repository.message.syncSuccess'));
+                }, 500);
+            }
+        });
+
+        await repositoriesStore.syncRepository(repo.name);
+    }
+    catch (err) {
+        error(`Sync failed: ${err}`);
+        syncError.value = String(err);
+        isSyncing.value = false;
+        syncProgress.value = 0;
+        messageRef.error(t('repository.message.syncFailed'));
+    }
+    finally {
+        unlisten?.();
+    }
+};
+
+const messageRef = useMessage();
 
 const handleConfigureRemote = () => {
     configRemoteUrl.value = props.repository.remoteUrl || '';
@@ -56,7 +127,7 @@ const handleConfigureRemote = () => {
 
 const handleSaveConfig = async () => {
     configErrorMessage.value = '';
-    await repositoriesManager.configureRepository(
+    await repositoriesStore.configureRepository(
         props.repository.name,
         configRemoteUrl.value || null,
         configUserName.value || null,
@@ -112,9 +183,13 @@ const statusColor = computed(() => {
                         <NIcon :component="Settings20Regular" :size="16" />
                         <span>{{ t('repository.label.configureRemote') }}</span>
                     </div>
-                    <div class="action-item" @click.stop="handleSync">
-                        <NIcon :component="ArrowSync20Regular" :size="16" />
-                        <span>{{ t('repository.label.sync') }}</span>
+                    <div class="action-item" :class="{ 'action-item-disabled': isSyncing }" @click.stop="handleSync">
+                        <NIcon :component="ArrowSync20Regular" :size="16" :class="{ 'icon-spin': isSyncing }" />
+                        <span>{{ isSyncing ? t('repository.label.syncing') : t('repository.label.sync') }}</span>
+                    </div>
+                    <div v-if="isSyncing" class="sync-progress">
+                        <NProgress :percentage="syncProgress" :processing="syncProgress < 100" :status="syncProgress < 100 ? 'default' : 'success'" />
+                        <span class="sync-step-text">{{ syncStep }}</span>
                     </div>
                     <div class="action-item action-item-danger" @click.stop="showDeleteConfirmModal = true">
                         <NIcon :component="Delete20Regular" :size="16" />
@@ -269,6 +344,33 @@ const statusColor = computed(() => {
 
 .action-item-danger:hover {
     background-color: rgba(208, 48, 80, 0.08);
+}
+
+.action-item-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.icon-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.sync-progress {
+    padding: 8px 16px 12px;
+}
+
+.sync-step-text {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.8em;
+    opacity: 0.7;
+    text-align: center;
 }
 
 .config-content {

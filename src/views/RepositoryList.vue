@@ -3,11 +3,11 @@ import { NButton, NModal, NInput, NSelect, NSpace, NIcon } from 'naive-ui';
 import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Add24Regular } from '@vicons/fluent';
-import { RepositoriesManager } from '@/repositories';
+import { useRepositoriesStore } from '@/stores/repositories';
 import RepositoryCard from '@/components/RepositoryCard.vue';
 
 const { t } = useI18n();
-const repositoriesManager = RepositoriesManager();
+const repositoriesStore = useRepositoriesStore();
 
 const showModal = ref(false);
 const repoType = ref<'local' | 'remote'>('local');
@@ -32,12 +32,12 @@ function closeModal() {
 function createRepository() {
     if (repoType.value === 'local') {
         if (repoName.value.trim()) {
-            repositoriesManager.initLocalRepository(repoName.value.trim());
+            repositoriesStore.initLocalRepository(repoName.value.trim());
             showModal.value = false;
         }
     } else {
         if (remoteUrl.value.trim()) {
-            repositoriesManager.cloneRemoteRepository(remoteUrl.value.trim(), repoName.value.trim() || undefined);
+            repositoriesStore.cloneRemoteRepository(remoteUrl.value.trim(), repoName.value.trim() || undefined);
             showModal.value = false;
         }
     }
@@ -51,11 +51,11 @@ function createRepository() {
             <span>{{ $t('repository.action.create') }}</span>
         </div>
         <RepositoryCard
-            v-for="repo in repositoriesManager.repositories"
+            v-for="repo in repositoriesStore.repositories"
             :key="repo.name"
             :repository="repo"
             width="440px"
-            @select="(name: string) => repositoriesManager.selectedRepository = repositoriesManager.repositories.find(r => r.name === name) || null"
+            @select="(name: string) => repositoriesStore.selectedRepository = repositoriesStore.repositories.find(r => r.name === name) || null"
         />
 
         <n-modal v-model:show="showModal" preset="card" :title="$t('repository.action.create')" :style="{ width: '440px' }" :mask-closable="false">

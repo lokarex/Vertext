@@ -1,13 +1,13 @@
 import { createI18n } from "vue-i18n";
-import zhCN from './locals/zh-CN.ts';
-import en from './locals/en.ts'
-import { SettingsManager } from "@/settings.ts";
+import zhCN from './locales/zh-CN.ts';
+import en from './locales/en.ts'
+import { useSettingsStore } from "@/stores/settings";
 
 let i18nInstance: ReturnType<typeof createI18n> | null = null;
 
 export function initializeI18n() {
     if (!i18nInstance) {
-        const settingsManager = SettingsManager();
+        const settingsStore = useSettingsStore();
 
         i18nInstance = createI18n({
             messages: {
@@ -16,7 +16,7 @@ export function initializeI18n() {
             },
             legacy: false,
             globalInjection: true,
-            locale: settingsManager.language as string || 'en',
+            locale: settingsStore.language as string || 'en',
             fallbackLocale: 'en',
         });
     }

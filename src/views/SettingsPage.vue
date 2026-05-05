@@ -1,12 +1,12 @@
 <script lang="ts" setup>
-import { SettingsManager, Theme } from '@/settings';
+import { useSettingsStore, Theme } from '@/stores/settings';
 import { NSelect, SelectOption, NInputNumber, NCard, NDivider } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
 import { computed } from 'vue';
 
 const { t } = useI18n();
 
-const settingsManager = SettingsManager();
+const settingsStore = useSettingsStore();
 
 const themeOptions = computed(() => [
     {
@@ -20,12 +20,12 @@ const themeOptions = computed(() => [
 ]);
 
 function handleThemeChange(value: string, _options: SelectOption) {
-    settingsManager.setTheme(value as Theme);
+    settingsStore.setTheme(value as Theme);
 }
 
 function handleFontSizeChange(value: number | null) {
     if (value !== null) {
-        settingsManager.setFontSize(value)
+        settingsStore.setFontSize(value)
     }
 }
 
@@ -41,7 +41,7 @@ const languageOptions = computed(() => [
 ]);
 
 function handleLanguageChange(value: "en" | "zh-CN", _options: SelectOption) {
-    settingsManager.setLanguage(value);
+    settingsStore.setLanguage(value);
 }
 </script>
 
@@ -54,21 +54,21 @@ function handleLanguageChange(value: "en" | "zh-CN", _options: SelectOption) {
 
             <div class="settings-item">
                 <label class="settings-item-title">{{ $t('settings.label.theme') }}</label>
-                <n-select v-model:value="settingsManager.theme" :options="themeOptions" @update-value="handleThemeChange"/>
+                <n-select v-model:value="settingsStore.theme" :options="themeOptions" @update-value="handleThemeChange"/>
             </div>
 
             <n-divider/>
 
             <div class="settings-item">
                 <label class="settings-item-title">{{ $t('settings.label.fontSize') }}</label>
-                <n-input-number v-model:value="settingsManager.fontSize" size="small" @update:value="handleFontSizeChange" :min="12" :max="36"/>
+                <n-input-number v-model:value="settingsStore.fontSize" size="small" @update:value="handleFontSizeChange" :min="12" :max="36"/>
             </div>
 
             <n-divider/>
 
             <div class="settings-item">
                 <label class="settings-item-title">{{ $t('settings.label.language') }}</label>
-                <n-select v-model:value="settingsManager.language" :options="languageOptions" @update-value="handleLanguageChange"/>
+                <n-select v-model:value="settingsStore.language" :options="languageOptions" @update-value="handleLanguageChange"/>
             </div>
 
         </div>

@@ -1,11 +1,6 @@
+pub mod command;
 pub mod fs;
-pub mod git;
-
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+pub mod repository;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -22,7 +17,7 @@ pub fn run() {
                 window.open_devtools();
             }
         }
-        git::init_repos_dir(app);
+        command::init_repos_dir(app);
         Ok(())
     });
 
@@ -43,11 +38,15 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
-            git::init_local_repository,
-            git::clone_remote_repository,
-            git::delete_repository,
-            git::list_repository_tree
+            command::init_local_repository,
+            command::clone_remote_repository,
+            command::sync_repository,
+            command::delete_repository,
+            command::list_repository_tree,
+            command::create_file_entry,
+            command::create_directory_entry,
+            command::rename_entry,
+            command::delete_entry
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

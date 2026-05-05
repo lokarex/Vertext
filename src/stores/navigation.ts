@@ -6,7 +6,7 @@ import { debug, trace } from '@tauri-apps/plugin-log';
 export type View = 'repositoryList' | 'editor' | 'settingsView';
 
 
-export const ViewsManager = defineStore('views', () => {
+export const useNavigationStore = defineStore('navigation', () => {
     const selectedView = ref<View>('repositoryList');
     const previousViews = ref<View[]>([]);
     let store: Store | null = null;
@@ -15,10 +15,10 @@ export const ViewsManager = defineStore('views', () => {
 
     async function initialize() {
         try {
-            trace('Initializing views manager...');
+            trace('Initializing navigation store...');
 
             trace('Loading tauri store...');
-            store = await Store.load('views.json');
+            store = await Store.load('navigation.json');
             trace('Tauri store loaded successfully.');
 
             trace('Loading selected view...');
@@ -28,7 +28,7 @@ export const ViewsManager = defineStore('views', () => {
             trace('Selected view loaded successfully.');
         }
         catch (err) {
-            trace(`Failed to initialize views manager: ${err}`);
+            trace(`Failed to initialize navigation store: ${err}`);
             isInitialized.value = false;
             throw err;
         }

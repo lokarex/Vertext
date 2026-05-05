@@ -3,23 +3,18 @@ import { Store } from "@tauri-apps/plugin-store";
 import { ref } from "vue";
 import { invoke } from '@tauri-apps/api/core';
 import { debug, error, trace } from '@tauri-apps/plugin-log';
+import type { Repository } from '@/models/Repository';
 
-export type RepositoryStatus = 'unconfigured' | 'unsynced' | 'synced';
-
-export class Repository {
-    name!: string;
-
-    status: RepositoryStatus = 'unconfigured';
-    remoteUrl: string | null = null;
-    userName: string | null = null;
-    password: string | null = null;
-}
-
-export const RepositoriesManager = defineStore('repositories', () => {
+export const useRepositoriesStore = defineStore('repositories', () => {
     let store: Store | null = null;
 
     const repositories = ref<Repository[]>([]);
     const selectedRepository = ref<Repository | null>(null);
+    const fileTreeOpen = ref(false);
+
+    function toggleFileTree() {
+        fileTreeOpen.value = !fileTreeOpen.value
+    }
 
     async function initialize() {
         try {
@@ -95,12 +90,39 @@ export const RepositoriesManager = defineStore('repositories', () => {
         }
     }
 
+    async function syncRepository(repoName: string) {
+        try {
+            const repo = repositories.value.find(r => r.name === repoName);
+            if (!repo || !repo.remoteUrl || !repo.userName || !repo.password) {
+                error(`Repository '${repoName}' is not configured for sync`);
+                throw new Error('Repository is not configured for sync');
+            }
+            await invoke('sync_repository', {
+                repoName,
+                remoteUrl: repo.remoteUrl,
+                userName: repo.userName,
+                password: repo.password,
+            });
+            repo.status = 'synced';
+            await store?.set('repositories', repositories.value);
+            await store?.save();
+            trace(`Sync completed for repository: ${repoName}`);
+        }
+        catch (err) {
+            error(`Failed to sync repository: ${err}`);
+            throw err;
+        }
+    }
+
     return {
         repositories,
         selectedRepository,
+        fileTreeOpen,
+        toggleFileTree,
         initLocalRepository,
         cloneRemoteRepository,
         configureRepository,
-        deleteRepository
+        deleteRepository,
+        syncRepository,
     };
 })
