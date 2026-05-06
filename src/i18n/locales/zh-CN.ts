@@ -9,6 +9,7 @@ export default {
             sync: '同步',
             configure: '配置',
             save: '保存',
+            restore: '恢复',
         },
         label: {
             name: '仓库名称',
@@ -23,6 +24,8 @@ export default {
             syncing: '同步中...',
             configureRemote: '配置远程仓库',
             sync: '同步',
+            history: '历史版本',
+            loading: '加载中...',
             delete: '删除仓库',
             remoteUrlPlaceholder: '请输入远程地址',
             userName: '用户名',
@@ -43,6 +46,10 @@ export default {
             syncFetching: '拉取远程分支...',
             syncMerging: '合并最新提交...',
             syncPushing: '推送所有分支...',
+            noHistory: '暂无提交记录',
+            restoreSuccess: '恢复成功',
+            restoreFailed: '恢复失败',
+            restoreConfirm: '要恢复到此提交吗？将创建一个新的恢复提交，内容与所选历史状态一致。',
         },
     },
     language: {

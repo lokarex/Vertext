@@ -1,6 +1,20 @@
 use std::path::Path;
 
 use log::trace;
+use serde::Serialize;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitInfo {
+    pub oid: String,
+    pub full_oid: String,
+    pub message: String,
+    pub author: String,
+    pub time: i64,
+    pub branches: Vec<String>,
+    pub tags: Vec<String>,
+    pub is_head: bool,
+}
 
 pub struct Repository {
     inner: git2::Repository,
@@ -384,5 +398,99 @@ impl Repository {
             .map_err(|e| e.to_string())?
             .target()
             .ok_or_else(|| "HEAD has no target".to_string())
+    }
+
+    pub fn history(&self) -> Result<Vec<CommitInfo>, String> {
+        let mut revwalk = self.inner.revwalk().map_err(|e| e.to_string())?;
+        revwalk.push_glob("refs/heads/*").map_err(|e| e.to_string())?;
+        revwalk.push_glob("refs/remotes/*").map_err(|e| e.to_string())?;
+
+        let mut oid_branches = std::collections::HashMap::new();
+        let mut oid_tags = std::collections::HashMap::new();
+
+        for ref_result in self.inner.references().map_err(|e| e.to_string())? {
+            let reference = ref_result.map_err(|e| e.to_string())?;
+            let name = reference.name().unwrap_or("");
+            if let Some(oid) = reference.target() {
+                if name.starts_with("refs/heads/") {
+                    let branch = name.strip_prefix("refs/heads/").unwrap_or(name);
+                    oid_branches
+                        .entry(oid)
+                        .or_insert_with(Vec::new)
+                        .push(branch.to_string());
+                } else if name.starts_with("refs/tags/") {
+                    let tag = name.strip_prefix("refs/tags/").unwrap_or(name);
+                    oid_tags
+                        .entry(oid)
+                        .or_insert_with(Vec::new)
+                        .push(tag.to_string());
+                }
+            }
+        }
+
+        let head_oid = self
+            .inner
+            .head()
+            .ok()
+            .and_then(|h| h.target());
+
+        let mut commits: Vec<CommitInfo> = Vec::new();
+        for oid_result in revwalk {
+            let oid = oid_result.map_err(|e| e.to_string())?;
+            let commit = self.inner.find_commit(oid).map_err(|e| e.to_string())?;
+            commits.push(CommitInfo {
+                oid: oid.to_string()[..7].to_string(),
+                full_oid: oid.to_string(),
+                message: commit
+                    .message()
+                    .unwrap_or("")
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .to_string(),
+                author: commit.author().name().unwrap_or("").to_string(),
+                time: commit.time().seconds(),
+                branches: oid_branches.get(&oid).cloned().unwrap_or_default(),
+                tags: oid_tags.get(&oid).cloned().unwrap_or_default(),
+                is_head: head_oid == Some(oid),
+            });
+        }
+
+        Ok(commits)
+    }
+
+    pub fn restore_to(&self, target_oid: git2::Oid) -> Result<(), String> {
+        let target_commit = self.inner.find_commit(target_oid).map_err(|e| e.to_string())?;
+        let target_tree = target_commit.tree().map_err(|e| e.to_string())?;
+        let our_head = self.inner.head().map_err(|e| e.to_string())?;
+        let our_commit = our_head
+            .peel_to_commit()
+            .map_err(|e| e.to_string())?;
+
+        let sig = self.inner.signature().map_err(|e| e.to_string())?;
+
+        let msg = format!("Restore to {}", &target_oid.to_string()[..7]);
+        let restore_oid = self
+            .inner
+            .commit(
+                Some("HEAD"),
+                &sig,
+                &sig,
+                &msg,
+                &target_tree,
+                &[&our_commit, &target_commit],
+            )
+            .map_err(|e| e.to_string())?;
+
+        let restore_commit = self.inner.find_commit(restore_oid).map_err(|e| e.to_string())?;
+        let restore_tree = restore_commit.tree().map_err(|e| e.to_string())?;
+        self.inner
+            .checkout_tree(
+                restore_tree.as_object(),
+                Some(git2::build::CheckoutBuilder::default().force()),
+            )
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
     }
 }

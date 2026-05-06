@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { NCard, NIcon, NButton, NModal, NInput, NSpace, NAlert, NProgress, useMessage } from 'naive-ui';
+import { NCard, NIcon, NButton, NModal, NInput, NSpace, NAlert, NProgress, NTimeline, NTimelineItem, NTag, NScrollbar, NTooltip, useMessage } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
-import { Folder24Regular, ChevronRight16Regular, ArrowSync20Regular, Settings20Regular, Delete20Regular } from '@vicons/fluent';
+import { Folder24Regular, ChevronRight16Regular, ArrowSync20Regular, Settings20Regular, Delete20Regular, History20Regular, ArrowUndo20Regular } from '@vicons/fluent';
 import { useRepositoriesStore } from '@/stores/repositories';
 import type { Repository } from '@/models/Repository';
+import type { CommitInfo } from '@/models/CommitInfo';
 import { listen } from '@tauri-apps/api/event';
 import { error } from '@tauri-apps/plugin-log';
+import { invoke } from '@tauri-apps/api/core';
 
 interface RepositoryCardProps {
     repository: Repository;
@@ -40,6 +42,10 @@ const isSyncing = ref(false);
 const syncProgress = ref(0);
 const syncStep = ref('');
 const syncError = ref('');
+const showHistory = ref(false);
+const historyCommits = ref<CommitInfo[]>([]);
+const historyLoading = ref(false);
+const restoreTargetOid = ref<string | null>(null);
 
 const handleToggleExpand = () => {
     isExpanded.value = !isExpanded.value;
@@ -114,6 +120,47 @@ const handleSync = async () => {
         unlisten?.();
     }
 };
+
+const handleToggleHistory = async () => {
+    showHistory.value = !showHistory.value;
+    if (showHistory.value && historyCommits.value.length === 0) {
+        historyLoading.value = true;
+        try {
+            historyCommits.value = await invoke<CommitInfo[]>('list_commit_history', {
+                repoName: props.repository.name
+            });
+        } catch (err) {
+            error(`Failed to load history: ${err}`);
+        } finally {
+            historyLoading.value = false;
+        }
+    }
+};
+
+function formatCommitTime(timestamp: number): string {
+    const d = new Date(timestamp * 1000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+async function handleConfirmRestore() {
+    const oid = restoreTargetOid.value;
+    if (!oid) return;
+    restoreTargetOid.value = null;
+    try {
+        await invoke('restore_commit', {
+            repoName: props.repository.name,
+            commitOid: oid,
+        });
+        historyCommits.value = [];
+        await handleToggleHistory();
+        repositoriesStore.setStatus(props.repository.name, 'unsynced');
+        messageRef.success(t('repository.message.restoreSuccess'));
+    } catch (err) {
+        error(`Restore failed: ${err}`);
+        messageRef.error(t('repository.message.restoreFailed'));
+    }
+}
 
 const messageRef = useMessage();
 
@@ -191,6 +238,42 @@ const statusColor = computed(() => {
                         <NProgress :percentage="syncProgress" :processing="syncProgress < 100" :status="syncProgress < 100 ? 'default' : 'success'" />
                         <span class="sync-step-text">{{ syncStep }}</span>
                     </div>
+                    <div class="action-item" @click.stop="handleToggleHistory">
+                        <NIcon :component="History20Regular" :size="16" />
+                        <span>{{ t('repository.label.history') }}</span>
+                    </div>
+                    <div v-if="showHistory" class="history-section">
+                        <n-scrollbar style="max-height: 260px">
+                            <div v-if="historyLoading" class="history-loading">{{ t('repository.label.loading') }}</div>
+                            <div v-else-if="historyCommits.length === 0" class="history-empty">{{ t('repository.message.noHistory') }}</div>
+                            <NTimeline v-else>
+                                <NTimelineItem v-for="commit in historyCommits" :key="commit.fullOid" type="info">
+                                    <div class="history-row history-row-top">
+                                        <span class="history-oid">{{ commit.oid }}</span>
+                                        <NTag v-for="branch in commit.branches" :key="branch" size="tiny" :bordered="false" type="success">
+                                            {{ branch }}
+                                        </NTag>
+                                        <NTag v-for="tag in commit.tags" :key="tag" size="tiny" :bordered="false" type="warning">
+                                            {{ tag }}
+                                        </NTag>
+                                        <NTooltip v-if="!commit.isHead" trigger="hover">
+                                            <template #trigger>
+                                                <NButton text size="tiny" @click.stop="restoreTargetOid = commit.fullOid">
+                                                    <template #icon>
+                                                        <NIcon :component="ArrowUndo20Regular" :size="14" />
+                                                    </template>
+                                                    {{ t('repository.action.restore') }}
+                                                </NButton>
+                                            </template>
+                                            {{ t('repository.action.restore') }}
+                                        </NTooltip>
+                                    </div>
+                                    <div class="history-row history-msg">{{ commit.message }}</div>
+                                    <div class="history-row history-author">{{ commit.author }} · {{ formatCommitTime(commit.time) }}</div>
+                                </NTimelineItem>
+                            </NTimeline>
+                        </n-scrollbar>
+                    </div>
                     <div class="action-item action-item-danger" @click.stop="showDeleteConfirmModal = true">
                         <NIcon :component="Delete20Regular" :size="16" />
                         <span>{{ t('repository.label.delete') }}</span>
@@ -231,6 +314,16 @@ const statusColor = computed(() => {
                 <NSpace justify="end">
                     <NButton @click="showDeleteConfirmModal = false">{{ t('repository.action.cancel') }}</NButton>
                     <NButton type="error" @click="handleDelete">{{ t('repository.action.delete') }}</NButton>
+                </NSpace>
+            </template>
+        </NModal>
+
+        <NModal :show="restoreTargetOid !== null" @update:show="(v: boolean) => { if (!v) restoreTargetOid = null }" preset="card" :title="t('repository.action.restore')" :mask-closable="false" :style="{ width: '400px' }">
+            <div>{{ t('repository.message.restoreConfirm') }}</div>
+            <template #footer>
+                <NSpace justify="end">
+                    <NButton @click="restoreTargetOid = null">{{ t('repository.action.cancel') }}</NButton>
+                    <NButton type="warning" @click="handleConfirmRestore">{{ t('repository.action.restore') }}</NButton>
                 </NSpace>
             </template>
         </NModal>
@@ -391,5 +484,50 @@ const statusColor = computed(() => {
     font-size: 1.15em;
     font-weight: 500;
     color: var(--n-text-color);
+}
+
+.history-section {
+    border-top: 1px solid var(--n-border-color);
+    padding: 8px 0 4px;
+    margin: 0 12px;
+}
+
+.history-loading,
+.history-empty {
+    padding: 12px 0;
+    text-align: center;
+    font-size: 0.85em;
+    opacity: 0.6;
+}
+
+.history-oid {
+    font-family: monospace;
+    font-size: 0.85em;
+    opacity: 0.7;
+    margin-right: 4px;
+}
+
+.history-row {
+    margin-bottom: 4px;
+}
+
+.history-row:last-child {
+    margin-bottom: 0;
+}
+
+.history-row-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.history-msg {
+    font-size: 0.9em;
+}
+
+.history-author {
+    font-size: 0.8em;
+    opacity: 0.6;
 }
 </style>

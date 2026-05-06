@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::OnceLock};
 use tauri::{Emitter, Manager};
 
 use crate::fs::{read_dir_recursive, FileEntry};
-use crate::repository::Repository;
+use crate::repository::{CommitInfo, Repository};
 
 static REPOS_DIR: OnceLock<PathBuf> = OnceLock::new();
 
@@ -168,6 +168,21 @@ pub fn delete_repository(repo_name: String) -> Result<(), String> {
     let path = repos_dir().join(&repo_name);
     std::fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn list_commit_history(repo_name: String) -> Result<Vec<CommitInfo>, String> {
+    let path = repos_dir().join(&repo_name);
+    let repo = Repository::open(&path)?;
+    repo.history()
+}
+
+#[tauri::command]
+pub fn restore_commit(repo_name: String, commit_oid: String) -> Result<(), String> {
+    let path = repos_dir().join(&repo_name);
+    let repo = Repository::open(&path)?;
+    let oid = git2::Oid::from_str(&commit_oid).map_err(|e| e.to_string())?;
+    repo.restore_to(oid)
 }
 
 #[tauri::command]

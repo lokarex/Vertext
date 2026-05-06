@@ -3,7 +3,7 @@ import { Store } from "@tauri-apps/plugin-store";
 import { ref } from "vue";
 import { invoke } from '@tauri-apps/api/core';
 import { debug, error, trace } from '@tauri-apps/plugin-log';
-import type { Repository } from '@/models/Repository';
+import type { Repository, RepositoryStatus } from '@/models/Repository';
 
 export const useRepositoriesStore = defineStore('repositories', () => {
     let store: Store | null = null;
@@ -114,6 +114,15 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         }
     }
 
+    async function setStatus(repoName: string, status: RepositoryStatus) {
+        const repo = repositories.value.find(r => r.name === repoName);
+        if (repo) {
+            repo.status = status;
+            await store?.set('repositories', repositories.value);
+            await store?.save();
+        }
+    }
+
     return {
         repositories,
         selectedRepository,
@@ -124,5 +133,6 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         configureRepository,
         deleteRepository,
         syncRepository,
+        setStatus,
     };
 })

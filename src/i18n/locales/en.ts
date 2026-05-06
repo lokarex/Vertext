@@ -9,6 +9,7 @@ export default {
             sync: 'Sync',
             configure: 'Configure',
             save: 'Save',
+            restore: 'Restore',
         },
         label: {
             name: 'Repository Name',
@@ -23,6 +24,8 @@ export default {
             syncing: 'Syncing...',
             configureRemote: 'Configure Remote',
             sync: 'Sync',
+            history: 'History',
+            loading: 'Loading...',
             delete: 'Delete Repository',
             remoteUrlPlaceholder: 'Enter remote URL',
             userName: 'Username',
@@ -43,6 +46,10 @@ export default {
             syncFetching: 'Fetching remote branches...',
             syncMerging: 'Merging latest changes...',
             syncPushing: 'Pushing branches...',
+            noHistory: 'No commits found',
+            restoreSuccess: 'Restored successfully',
+            restoreFailed: 'Restore failed',
+            restoreConfirm: 'Restore to this commit? A new restore commit will be created with the content from the selected state.',
         },
     },
     language: {
