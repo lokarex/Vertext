@@ -15,6 +15,7 @@ export const useSettingsStore = defineStore('settings', () => {
     const theme = ref<Theme>('darkTheme');
     const fontSize = ref<number>(14);
     const language = ref<Language>('en');
+    const autoSaveInterval = ref<number>(10);
 
     const isInitialized = ref<boolean>(false);
 
@@ -33,6 +34,8 @@ export const useSettingsStore = defineStore('settings', () => {
             debug(`Loaded font size: ${fontSize.value}`);
             language.value = await store?.get('language') as Language ?? 'en';
             debug(`Loaded language: ${language.value}`);
+            autoSaveInterval.value = await store?.get('autoSaveInterval') as number ?? 10;
+            debug(`Loaded auto save interval: ${autoSaveInterval.value}`);
             isInitialized.value = true;
             trace('Settings loaded successfully.');
 
@@ -79,13 +82,22 @@ export const useSettingsStore = defineStore('settings', () => {
         (i18nInstance.global.locale as any).value = newLanguage || 'en';
     }
 
+    async function setAutoSaveInterval(newInterval: number) {
+        debug(`New auto save interval: ${newInterval}`);
+        await store?.set('autoSaveInterval', newInterval);
+        await store?.save();
+        autoSaveInterval.value = newInterval;
+    }
+
     return {
         theme,
         fontSize,
         language,
+        autoSaveInterval,
         isInitialized,
         setTheme,
         setFontSize,
         setLanguage,
+        setAutoSaveInterval,
     };
 });

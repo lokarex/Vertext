@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NModal, NInput, NSelect, NSpace, NIcon } from 'naive-ui';
+import { NButton, NModal, NInput, NSelect, NSpace, NIcon, NScrollbar } from 'naive-ui';
 import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Add24Regular } from '@vicons/fluent';
@@ -45,7 +45,8 @@ function createRepository() {
 </script>
 
 <template>
-    <div class="repository-list">
+    <n-scrollbar>
+      <div class="repository-list">
         <div class="create-button" @click="openModal">
             <n-icon :component="Add24Regular" :size="24" />
             <span>{{ $t('repository.action.create') }}</span>
@@ -54,11 +55,11 @@ function createRepository() {
             v-for="repo in repositoriesStore.repositories"
             :key="repo.name"
             :repository="repo"
-            width="440px"
-            @select="(name: string) => repositoriesStore.selectedRepository = repositoriesStore.repositories.find(r => r.name === name) || null"
+            width="340px"
+            @select="(name: string) => repositoriesStore.selectRepository(name)"
         />
 
-        <n-modal v-model:show="showModal" preset="card" :title="$t('repository.action.create')" :style="{ width: '440px' }" :mask-closable="false">
+        <n-modal v-model:show="showModal" preset="card" :title="$t('repository.action.create')" :style="{ width: '340px' }" :mask-closable="false">
             <n-space vertical>
                 <n-select v-model:value="repoType" :options="repoTypeOptions" />
 
@@ -73,7 +74,8 @@ function createRepository() {
                 </div>
             </template>
         </n-modal>
-    </div>
+      </div>
+    </n-scrollbar>
 </template>
 
 <style scoped>
@@ -90,7 +92,7 @@ function createRepository() {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 440px;
+    width: 340px;
     padding-bottom: 16px;
     cursor: pointer;
     font-size: 0.95em;

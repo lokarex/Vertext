@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { useSettingsStore, Theme } from '@/stores/settings';
-import { NSelect, SelectOption, NInputNumber, NCard, NDivider } from 'naive-ui';
+import { NSelect, SelectOption, NInputNumber, NCard, NDivider, NScrollbar } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
 import { computed } from 'vue';
 
@@ -43,10 +43,17 @@ const languageOptions = computed(() => [
 function handleLanguageChange(value: "en" | "zh-CN", _options: SelectOption) {
     settingsStore.setLanguage(value);
 }
+
+function handleAutoSaveIntervalChange(value: number | null) {
+    if (value !== null) {
+        settingsStore.setAutoSaveInterval(value)
+    }
+}
 </script>
 
 <template>
-    <n-card class="settings-card">
+    <n-scrollbar>
+      <n-card class="settings-card">
         <label class="settings-title">{{ $t('settings.title') }}</label>
         
         <div>
@@ -71,9 +78,19 @@ function handleLanguageChange(value: "en" | "zh-CN", _options: SelectOption) {
                 <n-select v-model:value="settingsStore.language" :options="languageOptions" @update-value="handleLanguageChange"/>
             </div>
 
+            <n-divider/>
+
+            <label class="settings-section-title">{{ $t('settings.label.editor') }}</label>
+
+            <div class="settings-item">
+                <label class="settings-item-title">{{ $t('settings.label.autoSaveInterval') }}</label>
+                <n-input-number v-model:value="settingsStore.autoSaveInterval" size="small" @update:value="handleAutoSaveIntervalChange" :min="1" :max="120"/>
+            </div>
+
         </div>
 
-    </n-card>
+      </n-card>
+    </n-scrollbar>
 </template>
 
 <style scoped>

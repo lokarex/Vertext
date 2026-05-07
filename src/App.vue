@@ -29,15 +29,15 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => ({
   <n-config-provider :theme="themeMap[settingsStore.theme ?? 'lightTheme']" :theme-overrides="themeOverrides">
     <n-global-style />
     <n-message-provider>
-      <main class="container">
+      <main class="main-container">
         <Header />
-        <div v-if="navigationStore.selectedView == 'settingsView'">
+        <div v-if="navigationStore.selectedView == 'settingsView'" class="view-content">
           <SettingsPage />
         </div>
-        <div v-if="navigationStore.selectedView == 'repositoryList'">
+        <div v-if="navigationStore.selectedView == 'repositoryList'" class="view-content">
           <RepositoryList />
         </div>
-        <div v-if="navigationStore.selectedView == 'editor'">
+        <div v-if="navigationStore.selectedView == 'editor'" class="view-content">
           <Editor />
         </div>
         <FileTreeDrawer />
@@ -47,7 +47,15 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => ({
 </template>
 
 <style scoped>
-</style>
+.main-container {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
 
-<style>
+.view-content {
+  flex: 1;
+  overflow: hidden;
+}
 </style>

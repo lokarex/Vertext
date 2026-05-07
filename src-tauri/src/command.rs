@@ -285,6 +285,53 @@ pub fn rename_entry(repo_name: String, entry_key: String, new_name: String) -> R
 }
 
 #[tauri::command]
+pub fn read_file_content(repo_name: String, relative_path: String) -> Result<String, String> {
+    trace!(
+        "Reading file content: repo={}, path={}",
+        repo_name,
+        relative_path
+    );
+    let full_path = repos_dir().join(&repo_name).join(&relative_path);
+    if !full_path.exists() {
+        error!("File not found: {:?}", full_path);
+        return Err(format!("File not found: {}", relative_path));
+    }
+    let content = std::fs::read_to_string(&full_path).map_err(|e| {
+        error!("Failed to read file {:?}: {}", full_path, e);
+        e.to_string()
+    })?;
+    trace!("Read {} bytes from {:?}", content.len(), full_path);
+    Ok(content)
+}
+
+#[tauri::command]
+pub fn write_file_content(
+    repo_name: String,
+    relative_path: String,
+    content: String,
+) -> Result<(), String> {
+    trace!(
+        "Writing file content: repo={}, path={}, {} bytes",
+        repo_name,
+        relative_path,
+        content.len()
+    );
+    let full_path = repos_dir().join(&repo_name).join(&relative_path);
+    if let Some(parent) = full_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            error!("Failed to create parent dir {:?}: {}", parent, e);
+            e.to_string()
+        })?;
+    }
+    std::fs::write(&full_path, &content).map_err(|e| {
+        error!("Failed to write file {:?}: {}", full_path, e);
+        e.to_string()
+    })?;
+    trace!("Wrote {} bytes to {:?}", content.len(), full_path);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn delete_entry(repo_name: String, entry_key: String) -> Result<(), String> {
     trace!("Deleting entry: repo={}, key={}", repo_name, entry_key);
     let full_path = repos_dir().join(&repo_name).join(&entry_key);

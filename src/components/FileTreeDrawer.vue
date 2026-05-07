@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { NDrawer, NDrawerContent, NIcon, NButtonGroup, NTree, NModal, NInput, NSpace, NTooltip, NButton, NSpin, useMessage } from 'naive-ui'
+import { NDrawer, NDrawerContent, NIcon, NButtonGroup, NTree, NModal, NInput, NSpace, NTooltip, NButton, NSpin, NScrollbar, useMessage } from 'naive-ui'
 import { ref, watch, computed, h, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { PanelRightExpand20Regular, DocumentAdd20Regular, FolderAdd20Regular, Rename20Regular, Delete20Regular, ArrowSync20Regular } from '@vicons/fluent'
 import { useRepositoriesStore } from '@/stores/repositories'
+import { useNavigationStore } from '@/stores/navigation'
+import { useEditorStore } from '@/stores/editor'
 import { useI18n } from 'vue-i18n'
 import type { FileEntry } from '@/models/FileEntry'
 import { attachIcons, getFileEntryIcon } from '@/composables/useFileTreeIcons'
@@ -12,6 +14,8 @@ import { findNodeByKey, removeNodeFromTree, getTargetParentDir, addNewEntryToTre
 const { t } = useI18n()
 
 const repositoriesStore = useRepositoriesStore()
+const navigationStore = useNavigationStore()
+const editorStore = useEditorStore()
 const message = useMessage()
 
 const selectedFileEntryKey = ref<string | null>(null)
@@ -86,9 +90,22 @@ async function loadFileTree(repoName: string) {
   }
 }
 
-function handleFileEntrySelect(keys: string[]) {
+async function handleFileEntrySelect(keys: string[]) {
   if (keys.length > 0) {
     selectedFileEntryKey.value = keys[0]
+    const node = findNodeByKey(fileTree.value, keys[0])
+    if (node && node.isLeaf) {
+      const repoName = repositoriesStore.selectedRepository!.name
+      const filePath = node.key
+      const fileName = node.label
+      try {
+        await editorStore.openFile(repoName, filePath, fileName)
+        repositoriesStore.fileTreeOpen = false
+        navigationStore.toEditor()
+      } catch (err) {
+        message.error(t('editor.message.loadFailed', { error: String(err) }))
+      }
+    }
   } else {
     selectedFileEntryKey.value = null
   }
@@ -97,6 +114,7 @@ function handleFileEntrySelect(keys: string[]) {
 const stopWatcher = watch(() => repositoriesStore.selectedRepository, (newRepo) => {
   if (newRepo) {
     loadFileTree(newRepo.name)
+    selectedFileEntryKey.value = null
     repositoriesStore.fileTreeOpen = true
   } else {
     fileTree.value = []
@@ -213,73 +231,76 @@ onUnmounted(() => {
 <template>
     <n-drawer v-model:show="repositoriesStore.fileTreeOpen" :default-width="300" :min-width="300" :placement="'left'" resizable>
         <n-drawer-content>
-            <div class="file-tree-header">
-                <h3 style="margin-left: 20px;">{{ repositoriesStore.selectedRepository?.name }}</h3>
-                <n-button @click="repositoriesStore.fileTreeOpen = false" class="file-tree-toggle" strong secondary round>
-                    <n-icon :component="PanelRightExpand20Regular" size="24" />
-                </n-button>
-            </div>
-            <div class="file-tree-toolbar">
-              <n-button-group size="small">
-                <n-tooltip trigger="hover">
-                  <template #trigger>
-                    <n-button strong secondary round @click="openNewFileModal" :disabled="!repositoriesStore.selectedRepository">
-                      <n-icon :component="DocumentAdd20Regular" :size="18" />
-                    </n-button>
-                  </template>
-                  {{ $t('fileTree.action.newFile') }}
-                </n-tooltip>
-                <n-tooltip trigger="hover">
-                  <template #trigger>
-                    <n-button strong secondary round @click="openNewFolderModal" :disabled="!repositoriesStore.selectedRepository">
-                      <n-icon :component="FolderAdd20Regular" :size="18" />
-                    </n-button>
-                  </template>
-                  {{ $t('fileTree.action.newFolder') }}
-                </n-tooltip>
-                <n-tooltip trigger="hover">
-                  <template #trigger>
-                    <n-button strong secondary round @click="openRenameModal" :disabled="renameDisabled">
-                      <n-icon :component="Rename20Regular" :size="18" />
-                    </n-button>
-                  </template>
-                  {{ $t('fileTree.action.rename') }}
-                </n-tooltip>
-                <n-tooltip trigger="hover">
-                  <template #trigger>
-                    <n-button strong secondary round @click="openDeleteModal" :disabled="deleteDisabled">
-                      <n-icon :component="Delete20Regular" :size="18" />
-                    </n-button>
-                  </template>
-                  {{ $t('fileTree.action.delete') }}
-                </n-tooltip>
-                <n-tooltip trigger="hover">
-                  <template #trigger>
-                    <n-button strong secondary round @click="refreshFileTree" :disabled="!repositoriesStore.selectedRepository || isRefreshing">
-                      <n-icon :component="ArrowSync20Regular" :size="18" />
-                    </n-button>
-                  </template>
-                  {{ $t('fileTree.action.refresh') }}
-                </n-tooltip>
-              </n-button-group>
-            </div>
-            <n-spin :show="isLoading" class="file-tree-body">
-              <n-tree
-                v-if="!isLoading && fileTree.length > 0"
-                :data="fileTree"
-                :selected-keys="selectedFileEntryKey ? [selectedFileEntryKey] : []"
-                @update:selected-keys="handleFileEntrySelect"
-                block-line
-                selectable
-                style="flex: 1; overflow-y: auto; padding: 12px;"
-              />
-              <div v-else-if="!isLoading && loadError" class="file-tree-placeholder">
-                {{ $t('fileTree.message.loadFailed', { error: loadError }) }}
+            <div class="drawer-body">
+              <div class="file-tree-header">
+                  <h3 style="margin-left: 20px;">{{ repositoriesStore.selectedRepository?.name }}</h3>
+                  <n-button @click="repositoriesStore.fileTreeOpen = false" class="file-tree-toggle" strong secondary round>
+                      <n-icon :component="PanelRightExpand20Regular" size="24" />
+                  </n-button>
               </div>
-              <div v-else-if="!isLoading && fileTree.length === 0" class="file-tree-placeholder">
-                {{ $t('fileTree.message.empty') }}
+              <div class="file-tree-toolbar">
+                <n-button-group size="small">
+                  <n-tooltip trigger="hover">
+                    <template #trigger>
+                      <n-button strong secondary round @click="openNewFileModal" :disabled="!repositoriesStore.selectedRepository">
+                        <n-icon :component="DocumentAdd20Regular" :size="18" />
+                      </n-button>
+                    </template>
+                    {{ $t('fileTree.action.newFile') }}
+                  </n-tooltip>
+                  <n-tooltip trigger="hover">
+                    <template #trigger>
+                      <n-button strong secondary round @click="openNewFolderModal" :disabled="!repositoriesStore.selectedRepository">
+                        <n-icon :component="FolderAdd20Regular" :size="18" />
+                      </n-button>
+                    </template>
+                    {{ $t('fileTree.action.newFolder') }}
+                  </n-tooltip>
+                  <n-tooltip trigger="hover">
+                    <template #trigger>
+                      <n-button strong secondary round @click="openRenameModal" :disabled="renameDisabled">
+                        <n-icon :component="Rename20Regular" :size="18" />
+                      </n-button>
+                    </template>
+                    {{ $t('fileTree.action.rename') }}
+                  </n-tooltip>
+                  <n-tooltip trigger="hover">
+                    <template #trigger>
+                      <n-button strong secondary round @click="openDeleteModal" :disabled="deleteDisabled">
+                        <n-icon :component="Delete20Regular" :size="18" />
+                      </n-button>
+                    </template>
+                    {{ $t('fileTree.action.delete') }}
+                  </n-tooltip>
+                  <n-tooltip trigger="hover">
+                    <template #trigger>
+                      <n-button strong secondary round @click="refreshFileTree" :disabled="!repositoriesStore.selectedRepository || isRefreshing">
+                        <n-icon :component="ArrowSync20Regular" :size="18" />
+                      </n-button>
+                    </template>
+                    {{ $t('fileTree.action.refresh') }}
+                  </n-tooltip>
+                </n-button-group>
               </div>
-            </n-spin>
+              <n-spin :show="isLoading" class="file-tree-body">
+                <n-scrollbar v-if="!isLoading && fileTree.length > 0" style="position: absolute">
+                  <n-tree
+                    :data="fileTree"
+                    :selected-keys="selectedFileEntryKey ? [selectedFileEntryKey] : []"
+                    @update:selected-keys="handleFileEntrySelect"
+                    block-line
+                    selectable
+                    style="padding: 12px;"
+                  />
+                </n-scrollbar>
+                <div v-else-if="!isLoading && loadError" class="file-tree-placeholder">
+                  {{ $t('fileTree.message.loadFailed', { error: loadError }) }}
+                </div>
+                <div v-else-if="!isLoading && fileTree.length === 0" class="file-tree-placeholder">
+                  {{ $t('fileTree.message.empty') }}
+                </div>
+              </n-spin>
+            </div>
         </n-drawer-content>
     </n-drawer>
 
@@ -327,10 +348,20 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.drawer-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
+}
+
 .file-tree-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-shrink: 0;
 }
 
 .file-tree-toggle {
@@ -342,11 +373,11 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .file-tree-body {
     flex: 1;
-    display: flex;
 }
 
 .file-tree-placeholder {

@@ -25,6 +25,13 @@ export const useRepositoriesStore = defineStore('repositories', () => {
             trace('Loading repositories...');
             repositories.value = await store?.get('repositories') as Repository[] ?? [];
             debug(`Loaded repositories: ${JSON.stringify(repositories.value)}`);
+
+            const selectedName = await store?.get('selectedRepositoryName') as string | null;
+            if (selectedName) {
+                selectedRepository.value = repositories.value.find(r => r.name === selectedName) ?? null;
+                debug(`Restored selected repository: ${selectedName}`);
+            }
+
             trace('Repositories manager initialized successfully.');
         }
         catch (err) {
@@ -123,6 +130,16 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         }
     }
 
+    function selectRepository(repoName: string | null) {
+        if (repoName === null) {
+            selectedRepository.value = null;
+        } else {
+            selectedRepository.value = repositories.value.find(r => r.name === repoName) ?? null;
+        }
+        store?.set('selectedRepositoryName', repoName);
+        store?.save();
+    }
+
     return {
         repositories,
         selectedRepository,
@@ -134,5 +151,6 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         deleteRepository,
         syncRepository,
         setStatus,
+        selectRepository,
     };
 })

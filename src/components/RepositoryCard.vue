@@ -15,18 +15,18 @@ interface RepositoryCardProps {
     width?: string;
 }
 const props = withDefaults(defineProps<RepositoryCardProps>(), {
-    width: '440px'
+    width: '340px'
 });
 
 const repositoriesStore = useRepositoriesStore();
 const isSelected = computed(() => repositoriesStore.selectedRepository?.name == props.repository.name);
 const handleClick = () => {
     if (isSelected.value) {
-        repositoriesStore.selectedRepository = null;
+        repositoriesStore.selectRepository(null);
         return;
     }
 
-    repositoriesStore.selectedRepository = props.repository;
+    repositoriesStore.selectRepository(props.repository.name);
 };
 
 const { t } = useI18n();

@@ -36,6 +36,8 @@ const navigationStore = useNavigationStore();
     position: sticky;
     top: 0;
     z-index: 100;
+    padding-top: env(safe-area-inset-top, 0px);
+    box-sizing: border-box;
 }
 
 .header-content {
