@@ -4,6 +4,7 @@ use tauri::{Emitter, Manager};
 
 use crate::fs::{read_dir_recursive, FileEntry};
 use crate::repository::{CommitInfo, Repository};
+use keyring_core::Entry;
 
 static REPOS_DIR: OnceLock<PathBuf> = OnceLock::new();
 
@@ -349,4 +350,26 @@ pub fn delete_entry(repo_name: String, entry_key: String) -> Result<(), String> 
         trace!("Deleted file: {:?}", full_path);
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_password(service: String, user: String) -> Result<Option<String>, String> {
+    let entry = Entry::new(&service, &user).map_err(|e: keyring_core::Error| e.to_string())?;
+    match entry.get_password() {
+        Ok(p) => Ok(Some(p)),
+        Err(keyring_core::Error::NoEntry) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn set_password(service: String, user: String, password: String) -> Result<(), String> {
+    let entry = Entry::new(&service, &user).map_err(|e: keyring_core::Error| e.to_string())?;
+    entry.set_password(&password).map_err(|e: keyring_core::Error| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_password(service: String, user: String) -> Result<(), String> {
+    let entry = Entry::new(&service, &user).map_err(|e: keyring_core::Error| e.to_string())?;
+    entry.delete_credential().map_err(|e: keyring_core::Error| e.to_string())
 }

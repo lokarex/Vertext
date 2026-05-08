@@ -5,6 +5,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { debug, error, trace } from '@tauri-apps/plugin-log';
 import type { Repository, RepositoryStatus } from '@/models/Repository';
 
+async function getPassword(user: string): Promise<string | null> {
+    return invoke('get_password', { service: 'vertext', user });
+}
+async function setPassword(user: string, password: string): Promise<void> {
+    await invoke('set_password', { service: 'vertext', user, password });
+}
+async function deletePassword(user: string): Promise<void> {
+    await invoke('delete_password', { service: 'vertext', user });
+}
+
 export const useRepositoriesStore = defineStore('repositories', () => {
     let store: Store | null = null;
 
@@ -44,7 +54,7 @@ export const useRepositoriesStore = defineStore('repositories', () => {
     async function initLocalRepository(repoName: string) {
         try {
             await invoke('init_local_repository', { repoName });
-            repositories.value.push({ name: repoName, status: 'unconfigured', remoteUrl: null, userName: null, password: null });
+            repositories.value.push({ name: repoName, status: 'unconfigured', remoteUrl: null, userName: null });
             await store?.set('repositories', repositories.value);
             await store?.save();
         }
@@ -57,7 +67,7 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         try {
             const resolvedRepoName = repoName || (remoteUrl.split('/').pop() || '').replace(/\.git$/, '');
             await invoke('clone_remote_repository', { remoteUrl, repoName: resolvedRepoName });
-            repositories.value.push({ name: resolvedRepoName, status: 'unconfigured', remoteUrl, userName: null, password: null });
+            repositories.value.push({ name: resolvedRepoName, status: 'unconfigured', remoteUrl, userName: null });
             await store?.set('repositories', repositories.value);
             await store?.save();
         }
@@ -71,7 +81,12 @@ export const useRepositoriesStore = defineStore('repositories', () => {
 
         repository.remoteUrl = remoteUrl || '';
         repository.userName = userName || '';
-        repository.password = password || '';
+
+        if (password) {
+            await setPassword(repoName, password);
+        } else {
+            try { await deletePassword(repoName); } catch { /* ignore if not exists */ }
+        }
 
         if (remoteUrl != null && userName != null && password != null && (repository.status == 'unconfigured' || repository.status == 'synced')) {
             repository.status = 'unsynced';
@@ -89,6 +104,7 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         try {
             await invoke('delete_repository', { repoName });
             repositories.value = repositories.value.filter(repo => repo.name !== repoName);
+            try { await deletePassword(repoName); } catch { /* ignore */ }
             await store?.set('repositories', repositories.value);
             await store?.save();
         }
@@ -100,15 +116,20 @@ export const useRepositoriesStore = defineStore('repositories', () => {
     async function syncRepository(repoName: string) {
         try {
             const repo = repositories.value.find(r => r.name === repoName);
-            if (!repo || !repo.remoteUrl || !repo.userName || !repo.password) {
+            if (!repo || !repo.remoteUrl || !repo.userName) {
                 error(`Repository '${repoName}' is not configured for sync`);
+                throw new Error('Repository is not configured for sync');
+            }
+            const password = await getPassword(repoName);
+            if (!password) {
+                error(`Repository '${repoName}' has no password configured`);
                 throw new Error('Repository is not configured for sync');
             }
             await invoke('sync_repository', {
                 repoName,
                 remoteUrl: repo.remoteUrl,
                 userName: repo.userName,
-                password: repo.password,
+                password,
             });
             repo.status = 'synced';
             await store?.set('repositories', repositories.value);

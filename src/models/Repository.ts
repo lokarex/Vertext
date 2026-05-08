@@ -5,5 +5,4 @@ export class Repository {
     status: RepositoryStatus = 'unconfigured';
     remoteUrl: string | null = null;
     userName: string | null = null;
-    password: string | null = null;
 }

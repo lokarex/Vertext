@@ -60,7 +60,7 @@ const handleSync = async () => {
     if (isSyncing.value) return;
 
     const repo = props.repository;
-    if (!repo.remoteUrl || !repo.userName || !repo.password) {
+    if (!repo.remoteUrl || !repo.userName) {
         messageRef.error(t('repository.message.syncNotConfigured'));
         return;
     }
@@ -167,7 +167,7 @@ const messageRef = useMessage();
 const handleConfigureRemote = () => {
     configRemoteUrl.value = props.repository.remoteUrl || '';
     configUserName.value = props.repository.userName || '';
-    configPassword.value = props.repository.password || '';
+    configPassword.value = '';
     configErrorMessage.value = '';
     showConfigModal.value = true;
 };

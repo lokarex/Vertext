@@ -10,6 +10,7 @@ pub fn run() {
     let builder = tauri::Builder::default();
 
     let builder = builder.setup(|app| {
+        keyring::use_native_store(false).expect("failed to init keyring native store");
         #[cfg(debug_assertions)]
         {
             use tauri::Manager;
@@ -50,7 +51,10 @@ pub fn run() {
             command::rename_entry,
             command::delete_entry,
             command::read_file_content,
-            command::write_file_content
+            command::write_file_content,
+            command::get_password,
+            command::set_password,
+            command::delete_password
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
