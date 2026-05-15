@@ -15,6 +15,7 @@ export default {
             name: 'Repository Name',
             nameHint: 'Leave empty to auto-derive from Remote URL',
             remoteUrl: 'Remote URL',
+            requiresAuth: 'Requires Authentication',
             localType: 'Local Repository',
             remoteType: 'Remote Repository',
             synced: 'Synced',

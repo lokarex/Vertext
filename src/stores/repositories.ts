@@ -63,11 +63,20 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         }
     }
 
-    async function cloneRemoteRepository(remoteUrl: string, repoName?: string) {
+    async function cloneRemoteRepository(remoteUrl: string, repoName?: string, userName?: string, password?: string) {
         try {
             const resolvedRepoName = repoName || (remoteUrl.split('/').pop() || '').replace(/\.git$/, '');
-            await invoke('clone_remote_repository', { remoteUrl, repoName: resolvedRepoName });
-            repositories.value.push({ name: resolvedRepoName, status: 'unconfigured', remoteUrl, userName: null });
+            await invoke('clone_remote_repository', {
+                remoteUrl,
+                repoName: resolvedRepoName,
+                userName: userName || null,
+                password: password || null,
+            });
+            const status: RepositoryStatus = (remoteUrl && userName && password) ? 'unsynced' : 'unconfigured';
+            repositories.value.push({ name: resolvedRepoName, status, remoteUrl, userName: userName || null });
+            if (password) {
+                await setPassword(resolvedRepoName, password);
+            }
             await store?.set('repositories', repositories.value);
             await store?.save();
         }

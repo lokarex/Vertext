@@ -15,6 +15,7 @@ export default {
             name: '仓库名称',
             nameHint: '留空则自动从远程地址推导',
             remoteUrl: '远程地址',
+            requiresAuth: '需要认证',
             localType: '本地仓库',
             remoteType: '远程仓库',
             synced: '已同步',

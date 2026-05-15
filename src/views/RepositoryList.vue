@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NModal, NInput, NSelect, NSpace, NIcon, NScrollbar } from 'naive-ui';
+import { NButton, NModal, NInput, NSelect, NSpace, NIcon, NScrollbar, NCheckbox } from 'naive-ui';
 import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Add24Regular } from '@vicons/fluent';
@@ -17,11 +17,17 @@ const repoTypeOptions = computed(() => [
 ]);
 const repoName = ref('');
 const remoteUrl = ref('');
+const requiresAuth = ref(false);
+const userName = ref('');
+const password = ref('');
 
 function openModal() {
     repoType.value = 'local';
     repoName.value = '';
     remoteUrl.value = '';
+    requiresAuth.value = false;
+    userName.value = '';
+    password.value = '';
     showModal.value = true;
 }
 
@@ -37,7 +43,10 @@ function createRepository() {
         }
     } else {
         if (remoteUrl.value.trim()) {
-            repositoriesStore.cloneRemoteRepository(remoteUrl.value.trim(), repoName.value.trim() || undefined);
+            const name = repoName.value.trim() || undefined;
+            const user = requiresAuth.value && userName.value.trim() ? userName.value.trim() : undefined;
+            const pass = requiresAuth.value && password.value ? password.value : undefined;
+            repositoriesStore.cloneRemoteRepository(remoteUrl.value.trim(), name, user, pass);
             showModal.value = false;
         }
     }
@@ -65,6 +74,11 @@ function createRepository() {
 
                 <n-input v-model:value="repoName" :placeholder="repoType === 'local' ? $t('repository.label.name') : $t('repository.label.nameHint')" @keydown.enter="createRepository" />
                 <n-input v-if="repoType === 'remote'" v-model:value="remoteUrl" :placeholder="$t('repository.label.remoteUrl')" @keydown.enter="createRepository" />
+                <template v-if="repoType === 'remote'">
+                    <n-checkbox v-model:checked="requiresAuth">{{ $t('repository.label.requiresAuth') }}</n-checkbox>
+                    <n-input v-if="requiresAuth" v-model:value="userName" :placeholder="$t('repository.label.userName')" @keydown.enter="createRepository" />
+                    <n-input v-if="requiresAuth" v-model:value="password" type="password" show-password-on="mousedown" :placeholder="$t('repository.label.password')" @keydown.enter="createRepository" />
+                </template>
             </n-space>
 
             <template #footer>

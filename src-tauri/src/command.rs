@@ -62,11 +62,26 @@ pub fn init_local_repository(repo_name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn clone_remote_repository(remote_url: String, repo_name: String) -> Result<(), String> {
+pub fn clone_remote_repository(
+    remote_url: String,
+    repo_name: String,
+    user_name: Option<String>,
+    password: Option<String>,
+) -> Result<(), String> {
     let path = repos_dir().join(&repo_name);
 
     let mut callbacks = git2::RemoteCallbacks::new();
     callbacks.certificate_check(|_, _| Ok(git2::CertificateCheckStatus::CertificateOk));
+
+    if let (Some(user), Some(pass)) = (&user_name, &password) {
+        let user = user.clone();
+        let pass = pass.clone();
+        callbacks.credentials(move |_url, _username, _allowed| {
+            git2::Cred::userpass_plaintext(&user, &pass).map_err(|e| {
+                git2::Error::new(git2::ErrorCode::Auth, git2::ErrorClass::Callback, &e.to_string())
+            })
+        });
+    }
 
     let mut fetch_opts = git2::FetchOptions::new();
     fetch_opts.remote_callbacks(callbacks);
