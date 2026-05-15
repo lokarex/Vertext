@@ -482,10 +482,71 @@ async function handleSave() {
   }
 }
 
+const shortcutLabels: Record<string, string> = {
+  bold: 'Ctrl+B',
+  italic: 'Ctrl+I',
+  strikethrough: 'Ctrl+Shift+X',
+  code: 'Ctrl+`',
+  h1: 'Ctrl+1',
+  h2: 'Ctrl+2',
+  h3: 'Ctrl+3',
+  bulletList: 'Ctrl+Shift+U',
+  orderedList: 'Ctrl+Shift+O',
+  blockquote: 'Ctrl+Shift+B',
+  link: 'Ctrl+K',
+  hr: 'Ctrl+Shift+H',
+  save: 'Ctrl+S',
+}
+
+function isWysiwygFocused(): boolean {
+  return !!editorRootEl.value?.contains(document.activeElement)
+}
+
+interface ShortcutDef {
+  ctrl: boolean
+  shift: boolean
+  key: string
+  action: () => void
+  milkdown: boolean
+}
+
+const shortcutDefs: ShortcutDef[] = [
+  { ctrl: true, shift: false, key: 'b', action: toggleBold, milkdown: true },
+  { ctrl: true, shift: false, key: 'i', action: toggleItalic, milkdown: true },
+  { ctrl: true, shift: true,  key: 'b', action: toggleBlockquote, milkdown: true },
+  { ctrl: true, shift: true,  key: 'x', action: toggleStrikethrough, milkdown: false },
+  { ctrl: true, shift: false, key: '`', action: toggleInlineCode, milkdown: false },
+  { ctrl: true, shift: false, key: '1', action: () => setHeading(1), milkdown: false },
+  { ctrl: true, shift: false, key: '2', action: () => setHeading(2), milkdown: false },
+  { ctrl: true, shift: false, key: '3', action: () => setHeading(3), milkdown: false },
+  { ctrl: true, shift: true,  key: 'u', action: toggleBulletList, milkdown: false },
+  { ctrl: true, shift: true,  key: 'o', action: toggleOrderedList, milkdown: false },
+  { ctrl: true, shift: false, key: 'k', action: insertLink, milkdown: false },
+  { ctrl: true, shift: true,  key: 'h', action: insertHorizontalRule, milkdown: false },
+]
+
 function handleKeydown(e: KeyboardEvent) {
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+  const ctrl = e.ctrlKey || e.metaKey
+
+  if (ctrl && e.key.toLowerCase() === 's') {
     e.preventDefault()
     handleSave()
+    return
+  }
+
+  if (!tab.value) return
+
+  const key = e.key.toLowerCase()
+  const shift = e.shiftKey
+  const inWysiwyg = isWysiwygFocused()
+
+  for (const def of shortcutDefs) {
+    if (ctrl === def.ctrl && shift === def.shift && key === def.key) {
+      if (def.milkdown && inWysiwyg) continue
+      e.preventDefault()
+      def.action()
+      return
+    }
   }
 }
 
@@ -526,7 +587,7 @@ onUnmounted(() => {
               <n-icon :component="TextBold24Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.bold') }}
+          {{ $t('editor.label.format.bold') }} ({{ shortcutLabels.bold }})
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
@@ -534,7 +595,7 @@ onUnmounted(() => {
               <n-icon :component="TextItalic24Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.italic') }}
+          {{ $t('editor.label.format.italic') }} ({{ shortcutLabels.italic }})
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
@@ -542,7 +603,7 @@ onUnmounted(() => {
               <n-icon :component="TextStrikethrough24Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.strikethrough') }}
+          {{ $t('editor.label.format.strikethrough') }} ({{ shortcutLabels.strikethrough }})
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
@@ -550,7 +611,7 @@ onUnmounted(() => {
               <n-icon :component="Code24Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.code') }}
+          {{ $t('editor.label.format.code') }} ({{ shortcutLabels.code }})
         </n-tooltip>
       </n-button-group>
 
@@ -561,7 +622,7 @@ onUnmounted(() => {
               <n-icon :component="TextHeader124Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.h1') }}
+          {{ $t('editor.label.format.h1') }} ({{ shortcutLabels.h1 }})
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
@@ -569,7 +630,7 @@ onUnmounted(() => {
               <n-icon :component="TextHeader220Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.h2') }}
+          {{ $t('editor.label.format.h2') }} ({{ shortcutLabels.h2 }})
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
@@ -577,7 +638,7 @@ onUnmounted(() => {
               <n-icon :component="TextHeader320Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.h3') }}
+          {{ $t('editor.label.format.h3') }} ({{ shortcutLabels.h3 }})
         </n-tooltip>
       </n-button-group>
 
@@ -588,7 +649,7 @@ onUnmounted(() => {
               <n-icon :component="TextBulletListSquare24Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.bulletList') }}
+          {{ $t('editor.label.format.bulletList') }} ({{ shortcutLabels.bulletList }})
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
@@ -596,7 +657,7 @@ onUnmounted(() => {
               <n-icon :component="TextNumberListLtr24Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.orderedList') }}
+          {{ $t('editor.label.format.orderedList') }} ({{ shortcutLabels.orderedList }})
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
@@ -604,7 +665,7 @@ onUnmounted(() => {
               <n-icon :component="TextQuote24Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.blockquote') }}
+          {{ $t('editor.label.format.blockquote') }} ({{ shortcutLabels.blockquote }})
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
@@ -612,7 +673,7 @@ onUnmounted(() => {
               <n-icon :component="Link24Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.link') }}
+          {{ $t('editor.label.format.link') }} ({{ shortcutLabels.link }})
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
@@ -620,7 +681,7 @@ onUnmounted(() => {
               <n-icon :component="LineHorizontal320Regular" :size="18" />
             </n-button>
           </template>
-          {{ $t('editor.label.format.hr') }}
+          {{ $t('editor.label.format.hr') }} ({{ shortcutLabels.hr }})
         </n-tooltip>
       </n-button-group>
 
@@ -657,7 +718,7 @@ onUnmounted(() => {
             <n-icon :component="justSaved ? CheckmarkCircle24Regular : Save24Regular" :size="18" />
           </n-button>
         </template>
-        {{ justSaved ? $t('editor.message.saved') : $t('editor.action.save') }}
+        {{ justSaved ? $t('editor.message.saved') : $t('editor.action.save') }} ({{ shortcutLabels.save }})
       </n-tooltip>
     </div>
 
