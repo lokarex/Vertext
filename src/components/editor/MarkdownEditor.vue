@@ -580,7 +580,7 @@ onUnmounted(() => {
 <template>
   <div class="markdown-editor" v-if="tab">
     <div class="editor-toolbar">
-      <n-button-group size="small">
+      <n-button-group size="small" v-show="tab.markdownMode !== 'preview'">
         <n-tooltip trigger="hover">
           <template #trigger>
             <n-button strong secondary round size="small" @click="toggleBold">
@@ -615,7 +615,7 @@ onUnmounted(() => {
         </n-tooltip>
       </n-button-group>
 
-      <n-button-group size="small">
+      <n-button-group size="small" v-show="tab.markdownMode !== 'preview'">
         <n-tooltip trigger="hover">
           <template #trigger>
             <n-button strong secondary round size="small" @click="setHeading(1)">
@@ -642,7 +642,7 @@ onUnmounted(() => {
         </n-tooltip>
       </n-button-group>
 
-      <n-button-group size="small">
+      <n-button-group size="small" v-show="tab.markdownMode !== 'preview'">
         <n-tooltip trigger="hover">
           <template #trigger>
             <n-button strong secondary round size="small" @click="toggleBulletList">
@@ -707,19 +707,21 @@ onUnmounted(() => {
         </n-tooltip>
       </n-button-group>
 
-      <n-tooltip trigger="hover">
-        <template #trigger>
-          <n-button
-            strong secondary round
-            size="small"
-            @click="handleSave"
-            :type="isDirty ? 'warning' : 'default'"
-          >
-            <n-icon :component="justSaved ? CheckmarkCircle24Regular : Save24Regular" :size="18" />
-          </n-button>
-        </template>
-        {{ justSaved ? $t('editor.message.saved') : $t('editor.action.save') }} ({{ shortcutLabels.save }})
-      </n-tooltip>
+      <div v-show="tab.markdownMode !== 'preview'">
+        <n-tooltip trigger="hover">
+          <template #trigger>
+            <n-button
+              strong secondary round
+              size="small"
+              @click="handleSave"
+              :type="isDirty ? 'warning' : 'default'"
+            >
+              <n-icon :component="justSaved ? CheckmarkCircle24Regular : Save24Regular" :size="18" />
+            </n-button>
+          </template>
+          {{ justSaved ? $t('editor.message.saved') : $t('editor.action.save') }} ({{ shortcutLabels.save }})
+        </n-tooltip>
+      </div>
     </div>
 
     <div class="editor-content" v-show="tab.markdownMode === 'wysiwyg'">
