@@ -137,6 +137,10 @@ export const useEditorStore = defineStore('editor', () => {
     })
 
     tab.savedContent = tab.content
+
+    if (repositoriesStore.selectedRepository && repositoriesStore.selectedRepository.status === 'synced') {
+      await repositoriesStore.setStatus(tab.repoName, 'unsynced')
+    }
   }
 
   function setMarkdownMode(tabId: string, mode: MarkdownMode): void {

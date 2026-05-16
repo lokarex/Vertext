@@ -70,6 +70,9 @@ async function confirmRename() {
     node.key = newKey
     selectedFileEntryKey.value = newKey
     showRenameModal.value = false
+    if (repositoriesStore.selectedRepository && repositoriesStore.selectedRepository.status === 'synced') {
+      await repositoriesStore.setStatus(repoName, 'unsynced')
+    }
     message.success(t('fileTree.message.renameSuccess'))
   } catch (err) {
     message.error(t('fileTree.message.renameFailed', { error: String(err) }))
@@ -143,6 +146,9 @@ async function confirmDelete() {
     removeNodeFromTree(fileTree.value, selectedFileEntryKey.value!)
     selectedFileEntryKey.value = null
     showDeleteModal.value = false
+    if (repositoriesStore.selectedRepository && repositoriesStore.selectedRepository.status === 'synced') {
+      await repositoriesStore.setStatus(repoName, 'unsynced')
+    }
     message.success(t('fileTree.message.deleteSuccess'))
   } catch (err) {
     message.error(t('fileTree.message.deleteFailed', { error: String(err) }))
@@ -187,6 +193,9 @@ async function confirmNewFile() {
     }
     fileTree.value = addNewEntryToTree(fileTree.value, parentPath, newEntry)
     showNewFileModal.value = false
+    if (repositoriesStore.selectedRepository && repositoriesStore.selectedRepository.status === 'synced') {
+      await repositoriesStore.setStatus(repoName, 'unsynced')
+    }
     message.success(t('fileTree.message.fileCreateSuccess'))
   } catch (err) {
     message.error(t('fileTree.message.createFailed', { error: String(err) }))
@@ -217,6 +226,9 @@ async function confirmNewFolder() {
     }
     fileTree.value = addNewEntryToTree(fileTree.value, parentPath, newEntry)
     showNewFolderModal.value = false
+    if (repositoriesStore.selectedRepository && repositoriesStore.selectedRepository.status === 'synced') {
+      await repositoriesStore.setStatus(repoName, 'unsynced')
+    }
     message.success(t('fileTree.message.folderCreateSuccess'))
   } catch (err) {
     message.error(t('fileTree.message.createFailed', { error: String(err) }))
