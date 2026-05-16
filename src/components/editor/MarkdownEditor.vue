@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, onUnmounted, nextTick } from 'vue'
 import type { Component } from 'vue'
 import { NButton, NButtonGroup, NIcon, NTooltip, NScrollbar, NModal, NInput, NSpace, useMessage } from 'naive-ui'
 import {
@@ -99,21 +99,21 @@ watch(
   },
 )
 
-function initMode() {
+async function initMode() {
   if (!tab.value) return
   const mode = tab.value.markdownMode
   if (mode === 'wysiwyg') {
-    createWysiwygEditor()
+    await createWysiwygEditor()
   } else if (mode === 'split') {
-    createSplitPreview()
+    await createSplitPreview()
     splitTextarea.value = tab.value.content
   } else if (mode === 'preview') {
-    createPreviewEditor()
+    await createPreviewEditor()
   }
 }
 
-function createWysiwygEditor() {
-  if (!editorRootEl.value || !tab.value) return
+function createWysiwygEditor(): Promise<void> {
+  if (!editorRootEl.value || !tab.value) return Promise.resolve()
   destroyEditor()
 
   const container = editorRootEl.value
@@ -135,15 +135,15 @@ function createWysiwygEditor() {
     .use(cursor)
     .use(listener)
 
-  editorInstance.create().then(() => {
+  return editorInstance.create().then(() => {
     editorInstance?.action((ctx) => {
       editorView = ctx.get(editorViewCtx)
     })
   })
 }
 
-function createSplitPreview() {
-  if (!splitPreviewEl.value || !tab.value) return
+function createSplitPreview(): Promise<void> {
+  if (!splitPreviewEl.value || !tab.value) return Promise.resolve()
   destroySplitPreview()
 
   const container = splitPreviewEl.value
@@ -159,11 +159,11 @@ function createSplitPreview() {
     .use(commonmark)
     .use(gfm)
 
-  splitPreviewInstance.create()
+  return splitPreviewInstance.create().then(() => {})
 }
 
-function createPreviewEditor() {
-  if (!previewRootEl.value || !tab.value) return
+function createPreviewEditor(): Promise<void> {
+  if (!previewRootEl.value || !tab.value) return Promise.resolve()
   destroyPreview()
 
   const container = previewRootEl.value
@@ -179,7 +179,7 @@ function createPreviewEditor() {
     .use(commonmark)
     .use(gfm)
 
-  previewInstance.create()
+  return previewInstance.create().then(() => {})
 }
 
 function updateSplitPreview() {
@@ -252,6 +252,41 @@ function getScrollContainer(el: HTMLElement): HTMLElement | null {
   const scrollbar = el.closest('.n-scrollbar')
   if (!scrollbar) return null
   return scrollbar.querySelector('.n-scrollbar-container') as HTMLElement | null
+}
+
+function saveScrollPosition() {
+  if (!tab.value) return
+  let targetEl: HTMLElement | undefined
+  const mode = tab.value.markdownMode
+  if (mode === 'wysiwyg') targetEl = editorRootEl.value
+  else if (mode === 'split') targetEl = splitTextareaEl.value
+  else if (mode === 'edit') targetEl = editTextareaEl.value
+  else if (mode === 'preview') targetEl = previewRootEl.value
+  if (targetEl) {
+    const container = getScrollContainer(targetEl)
+    if (container) {
+      editorStore.setTabScrollTop(props.tabId, container.scrollTop)
+    }
+  }
+}
+
+function restoreScrollPosition() {
+  if (!tab.value || tab.value.scrollTop <= 0) return
+  const t = tab.value
+  nextTick(() => {
+    let targetEl: HTMLElement | undefined
+    const mode = t.markdownMode
+    if (mode === 'wysiwyg') targetEl = editorRootEl.value
+    else if (mode === 'split') targetEl = splitTextareaEl.value
+    else if (mode === 'edit') targetEl = editTextareaEl.value
+    else if (mode === 'preview') targetEl = previewRootEl.value
+    if (targetEl) {
+      const container = getScrollContainer(targetEl)
+      if (container) {
+        container.scrollTop = t.scrollTop
+      }
+    }
+  })
 }
 
 function textareaWrap(prefix: string, suffix: string) {
@@ -561,12 +596,18 @@ watch(
   { deep: true },
 )
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('keydown', handleKeydown)
   tab.value = editorStore.tabs.find((t) => t.id === props.tabId) ?? null
   if (tab.value) {
-    nextTick(() => initMode())
+    await nextTick()
+    await initMode()
+    restoreScrollPosition()
   }
+})
+
+onBeforeUnmount(() => {
+  saveScrollPosition()
 })
 
 onUnmounted(() => {

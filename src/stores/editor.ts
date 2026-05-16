@@ -17,6 +17,7 @@ export interface Tab {
   content: string
   savedContent: string
   markdownMode: MarkdownMode
+  scrollTop: number
 }
 
 interface PersistedTab {
@@ -26,6 +27,7 @@ interface PersistedTab {
   fileName: string
   isMarkdown: boolean
   markdownMode: MarkdownMode
+  scrollTop: number
 }
 
 let tabCounter = 0
@@ -90,6 +92,7 @@ export const useEditorStore = defineStore('editor', () => {
       content,
       savedContent: content,
       markdownMode: 'wysiwyg',
+      scrollTop: 0,
     }
 
     tabs.value.push(tab)
@@ -195,6 +198,7 @@ export const useEditorStore = defineStore('editor', () => {
       fileName: tab.fileName,
       isMarkdown: tab.isMarkdown,
       markdownMode: tab.markdownMode,
+      scrollTop: tab.scrollTop,
     }
   }
 
@@ -241,6 +245,7 @@ export const useEditorStore = defineStore('editor', () => {
               fileName: pt.fileName,
               isMarkdown: pt.isMarkdown,
               markdownMode: pt.markdownMode,
+              scrollTop: pt.scrollTop ?? 0,
               content,
               savedContent: content,
             }
@@ -261,6 +266,13 @@ export const useEditorStore = defineStore('editor', () => {
     }
   }
 
+  function setTabScrollTop(tabId: string, scrollTop: number): void {
+    const tab = tabs.value.find((t) => t.id === tabId)
+    if (tab) {
+      tab.scrollTop = scrollTop
+    }
+  }
+
   initialize()
 
   return {
@@ -277,5 +289,6 @@ export const useEditorStore = defineStore('editor', () => {
     isTabDirty,
     startAutoSave,
     stopAutoSave,
+    setTabScrollTop,
   }
 })

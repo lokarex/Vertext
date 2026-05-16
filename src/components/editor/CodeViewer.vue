@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { NCode, NScrollbar } from 'naive-ui'
 import { useEditorStore } from '@/stores/editor'
 
@@ -14,6 +14,57 @@ const code = computed(() => tab.value?.content ?? '')
 const language = computed(() => {
   if (!tab.value) return 'text'
   return getLanguageFromFileName(tab.value.fileName)
+})
+
+const bodyRef = ref<HTMLElement>()
+
+function getScrollContainer(): HTMLElement | null {
+  if (!bodyRef.value) return null
+  const scrollbar = bodyRef.value.querySelector('.n-scrollbar')
+  if (!scrollbar) return null
+  return scrollbar.querySelector('.n-scrollbar-container') as HTMLElement | null
+}
+
+function saveScrollTop() {
+  const container = getScrollContainer()
+  if (container) {
+    editorStore.setTabScrollTop(props.tabId, container.scrollTop)
+  }
+}
+
+function restoreScrollTop() {
+  const t = tab.value
+  if (!t || t.scrollTop <= 0) return
+  nextTick(() => {
+    const container = getScrollContainer()
+    if (container) {
+      container.scrollTop = t.scrollTop
+    }
+  })
+}
+
+let scrollHandler: (() => void) | null = null
+
+onMounted(() => {
+  nextTick(() => {
+    const container = getScrollContainer()
+    if (container) {
+      scrollHandler = () => saveScrollTop()
+      container.addEventListener('scroll', scrollHandler, { passive: true })
+    }
+    restoreScrollTop()
+  })
+})
+
+onBeforeUnmount(() => {
+  saveScrollTop()
+  if (scrollHandler) {
+    const container = getScrollContainer()
+    if (container) {
+      container.removeEventListener('scroll', scrollHandler)
+    }
+    scrollHandler = null
+  }
 })
 
 function getLanguageFromFileName(fileName: string): string {
@@ -72,7 +123,7 @@ function getLanguageFromFileName(fileName: string): string {
       <span class="code-filename">{{ tab.fileName }}</span>
       <span class="code-lang">{{ language }}</span>
     </div>
-    <div class="code-body">
+    <div class="code-body" ref="bodyRef">
       <n-scrollbar style="height: 100%">
         <n-code :code="code" :language="language" word-wrap />
       </n-scrollbar>
