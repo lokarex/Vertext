@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { Component } from 'vue'
-import { NButton, NButtonGroup, NIcon, NTooltip, NScrollbar, NModal, NInput, NSpace, useMessage } from 'naive-ui'
+import { NButton, NButtonGroup, NIcon, NTooltip, NModal, NInput, NSpace, useMessage } from 'naive-ui'
 import {
   Save24Regular,
   CheckmarkCircle24Regular,
@@ -21,19 +21,14 @@ import {
   Link24Regular,
   LineHorizontal320Regular,
 } from '@vicons/fluent'
-import { Editor, rootCtx, defaultValueCtx, editorViewOptionsCtx, editorViewCtx } from '@milkdown/core'
-import { commonmark } from '@milkdown/kit/preset/commonmark'
-import { gfm } from '@milkdown/kit/preset/gfm'
-import { clipboard } from '@milkdown/kit/plugin/clipboard'
-import { history } from '@milkdown/kit/plugin/history'
-import { cursor } from '@milkdown/kit/plugin/cursor'
-import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
-import { nord } from '@milkdown/theme-nord'
-import { toggleMark, setBlockType, wrapIn } from 'prosemirror-commands'
-import type { EditorView } from 'prosemirror-view'
 import { useEditorStore } from '@/stores/editor'
 import { useI18n } from 'vue-i18n'
-import type { MarkdownMode, Tab } from '@/stores/editor'
+import type { MarkdownMode } from '@/stores/editor'
+import { useEditorCommands } from '@/composables/useEditorCommands'
+import WysiwygEditor from './WysiwygEditor.vue'
+import SplitEditor from './SplitEditor.vue'
+import TextareaEditor from './TextareaEditor.vue'
+import PreviewEditor from './PreviewEditor.vue'
 
 const props = defineProps<{
   tabId: string
@@ -43,174 +38,68 @@ const { t } = useI18n()
 const editorStore = useEditorStore()
 const message = useMessage()
 
-const tab = ref<Tab | null>(null)
+const tab = computed(() => editorStore.tabs.find((t) => t.id === props.tabId) ?? null)
 
-const editorRootEl = ref<HTMLDivElement>()
-const splitPreviewEl = ref<HTMLDivElement>()
-const previewRootEl = ref<HTMLDivElement>()
-const splitTextareaEl = ref<HTMLTextAreaElement>()
-const editTextareaEl = ref<HTMLTextAreaElement>()
+const wysiwygRef = ref<InstanceType<typeof WysiwygEditor>>()
+const splitRef = ref<InstanceType<typeof SplitEditor>>()
+const editRef = ref<InstanceType<typeof TextareaEditor>>()
 
-const splitTextarea = ref('')
-const editTextareaValue = ref('')
+const getEditorView = () => wysiwygRef.value?.getEditorView() ?? null
+const getTextareaElement = () => {
+  if (!tab.value) return null
+  if (tab.value.markdownMode === 'split') return splitRef.value?.getTextarea() ?? null
+  if (tab.value.markdownMode === 'edit') return editRef.value?.getTextarea() ?? null
+  return null
+}
+const isTextareaModeFn = () =>
+  tab.value ? (['split', 'edit'] as MarkdownMode[]).includes(tab.value.markdownMode) : false
+
+function getScrollContainer(el: HTMLElement): HTMLElement | null {
+  const scrollbar = el.closest('.n-scrollbar')
+  if (!scrollbar) return null
+  return scrollbar.querySelector('.n-scrollbar-container') as HTMLElement | null
+}
+
+const commands = useEditorCommands({
+  getEditorView,
+  getTextareaElement,
+  isTextareaMode: isTextareaModeFn,
+  getScrollContainer,
+})
 
 const justSaved = ref(false)
 
 const showLinkModal = ref(false)
 const linkTextInput = ref('')
 const linkUrlInput = ref('')
-let linkInsertMode: 'textarea' | 'wysiwyg' | null = null
 
-let editorInstance: Editor | null = null
-let splitPreviewInstance: Editor | null = null
-let previewInstance: Editor | null = null
-let editorView: EditorView | null = null
-
-function autoResize(el: HTMLTextAreaElement | undefined) {
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = el.scrollHeight + 'px'
+function openLinkModal() {
+  linkTextInput.value = commands.getSelectedText()
+  linkUrlInput.value = ''
+  showLinkModal.value = true
 }
 
-watch(
-  () => editorStore.activeTabId,
-  () => {
-    tab.value = editorStore.tabs.find((t) => t.id === props.tabId) ?? null
-  },
-  { immediate: true },
-)
-
-watch(
-  () => tab.value?.markdownMode,
-  (mode, oldMode) => {
-    if (oldMode === mode || !tab.value) return
-    destroyEditor()
-    destroySplitPreview()
-    destroyPreview()
-    if (mode === 'edit') {
-      editTextareaValue.value = tab.value.content
-      nextTick(() => autoResize(editTextareaEl.value))
-    }
-    if (mode === 'split') {
-      splitTextarea.value = tab.value.content
-      nextTick(() => autoResize(splitTextareaEl.value))
-    }
-    nextTick(() => initMode())
-  },
-)
-
-async function initMode() {
-  if (!tab.value) return
-  const mode = tab.value.markdownMode
-  if (mode === 'wysiwyg') {
-    await createWysiwygEditor()
-  } else if (mode === 'split') {
-    await createSplitPreview()
-    splitTextarea.value = tab.value.content
-  } else if (mode === 'preview') {
-    await createPreviewEditor()
-  }
+function confirmInsertLink() {
+  const text = linkTextInput.value
+  const url = linkUrlInput.value
+  if (!url || !text) return
+  commands.insertLinkAtSelection(text, url)
+  showLinkModal.value = false
 }
 
-function createWysiwygEditor(): Promise<void> {
-  if (!editorRootEl.value || !tab.value) return Promise.resolve()
-  destroyEditor()
-
-  const container = editorRootEl.value
-  container.innerHTML = ''
-
-  editorInstance = Editor.make()
-    .config((ctx: any) => {
-      ctx.set(rootCtx, container)
-      ctx.set(defaultValueCtx, tab.value!.content)
-      nord(ctx)
-      ctx.get(listenerCtx).markdownUpdated((_ctx: any, md: string) => {
-        editorStore.updateContent(props.tabId, md)
-      })
-    })
-    .use(commonmark)
-    .use(gfm)
-    .use(clipboard)
-    .use(history)
-    .use(cursor)
-    .use(listener)
-
-  return editorInstance.create().then(() => {
-    editorInstance?.action((ctx) => {
-      editorView = ctx.get(editorViewCtx)
-    })
-  })
+function cancelInsertLink() {
+  showLinkModal.value = false
 }
 
-function createSplitPreview(): Promise<void> {
-  if (!splitPreviewEl.value || !tab.value) return Promise.resolve()
-  destroySplitPreview()
-
-  const container = splitPreviewEl.value
-  container.innerHTML = ''
-
-  splitPreviewInstance = Editor.make()
-    .config((ctx: any) => {
-      ctx.set(rootCtx, container)
-      ctx.set(defaultValueCtx, tab.value!.content)
-      ctx.set(editorViewOptionsCtx, { editable: () => false })
-      nord(ctx)
-    })
-    .use(commonmark)
-    .use(gfm)
-
-  return splitPreviewInstance.create().then(() => {})
-}
-
-function createPreviewEditor(): Promise<void> {
-  if (!previewRootEl.value || !tab.value) return Promise.resolve()
-  destroyPreview()
-
-  const container = previewRootEl.value
-  container.innerHTML = ''
-
-  previewInstance = Editor.make()
-    .config((ctx: any) => {
-      ctx.set(rootCtx, container)
-      ctx.set(defaultValueCtx, tab.value!.content)
-      ctx.set(editorViewOptionsCtx, { editable: () => false })
-      nord(ctx)
-    })
-    .use(commonmark)
-    .use(gfm)
-
-  return previewInstance.create().then(() => {})
-}
-
-function updateSplitPreview() {
-  if (!tab.value) return
-  editorStore.updateContent(props.tabId, splitTextarea.value)
-
-  if (splitPreviewEl.value) {
-    destroySplitPreview()
-    createSplitPreview()
-  }
-}
-
-function destroyEditor() {
-  if (editorInstance) {
-    editorInstance.destroy(true).catch(() => {})
-    editorInstance = null
-    editorView = null
-  }
-}
-
-function destroySplitPreview() {
-  if (splitPreviewInstance) {
-    splitPreviewInstance.destroy(true).catch(() => {})
-    splitPreviewInstance = null
-  }
-}
-
-function destroyPreview() {
-  if (previewInstance) {
-    previewInstance.destroy(true).catch(() => {})
-    previewInstance = null
+async function handleSave() {
+  try {
+    await editorStore.saveFile(props.tabId)
+    justSaved.value = true
+    setTimeout(() => {
+      justSaved.value = false
+    }, 2000)
+  } catch (err) {
+    message.error(t('editor.message.saveFailed', { error: String(err) }))
   }
 }
 
@@ -229,293 +118,10 @@ function modeIcon(mode: MarkdownMode): Component {
   return icons[mode]
 }
 
-function exec(cmd: (state: any, dispatch?: any) => boolean) {
-  if (!editorView) return
-  cmd(editorView.state, editorView.dispatch)
-  editorView.dom.focus({ preventScroll: true } as any)
-}
-
-const textareaModes = ['split', 'edit'] as MarkdownMode[]
-
-function isTextareaMode(): boolean {
-  return tab.value ? textareaModes.includes(tab.value.markdownMode) : false
-}
-
-function getActiveTextarea(): HTMLTextAreaElement | null {
-  if (!tab.value) return null
-  if (tab.value.markdownMode === 'split') return splitTextareaEl.value ?? null
-  if (tab.value.markdownMode === 'edit') return editTextareaEl.value ?? null
-  return null
-}
-
-function getScrollContainer(el: HTMLElement): HTMLElement | null {
-  const scrollbar = el.closest('.n-scrollbar')
-  if (!scrollbar) return null
-  return scrollbar.querySelector('.n-scrollbar-container') as HTMLElement | null
-}
-
-function saveScrollPosition() {
-  if (!tab.value) return
-  let targetEl: HTMLElement | undefined
-  const mode = tab.value.markdownMode
-  if (mode === 'wysiwyg') targetEl = editorRootEl.value
-  else if (mode === 'split') targetEl = splitTextareaEl.value
-  else if (mode === 'edit') targetEl = editTextareaEl.value
-  else if (mode === 'preview') targetEl = previewRootEl.value
-  if (targetEl) {
-    const container = getScrollContainer(targetEl)
-    if (container) {
-      editorStore.setTabScrollTop(props.tabId, container.scrollTop)
-    }
-  }
-}
-
-function restoreScrollPosition() {
-  if (!tab.value || tab.value.scrollTop <= 0) return
-  const t = tab.value
-  nextTick(() => {
-    let targetEl: HTMLElement | undefined
-    const mode = t.markdownMode
-    if (mode === 'wysiwyg') targetEl = editorRootEl.value
-    else if (mode === 'split') targetEl = splitTextareaEl.value
-    else if (mode === 'edit') targetEl = editTextareaEl.value
-    else if (mode === 'preview') targetEl = previewRootEl.value
-    if (targetEl) {
-      const container = getScrollContainer(targetEl)
-      if (container) {
-        container.scrollTop = t.scrollTop
-      }
-    }
-  })
-}
-
-function textareaWrap(prefix: string, suffix: string) {
-  const el = getActiveTextarea()
-  if (!el || !tab.value) return
-  const scrollContainer = getScrollContainer(el)
-  const savedScrollTop = scrollContainer?.scrollTop ?? 0
-  const start = el.selectionStart
-  const end = el.selectionEnd
-  const value = el.value
-  const selected = value.slice(start, end)
-  const replaced = prefix + selected + suffix
-  const newValue = value.slice(0, start) + replaced + value.slice(end)
-  const storeKey = tab.value.markdownMode === 'split' ? splitTextarea : editTextareaValue
-  storeKey.value = newValue
-  nextTick(() => {
-    el.selectionStart = start + prefix.length
-    el.selectionEnd = start + prefix.length + selected.length
-    el.focus({ preventScroll: true } as any)
-    autoResize(el)
-    updateTextareaContent()
-    if (scrollContainer) {
-      requestAnimationFrame(() => {
-        scrollContainer.scrollTop = savedScrollTop
-      })
-    }
-  })
-}
-
-function textareaLinePrefix(prefix: string) {
-  const el = getActiveTextarea()
-  if (!el || !tab.value) return
-  const scrollContainer = getScrollContainer(el)
-  const savedScrollTop = scrollContainer?.scrollTop ?? 0
-  const start = el.selectionStart
-  const value = el.value
-  const lineStart = value.lastIndexOf('\n', start - 1) + 1
-  const end = value.indexOf('\n', start)
-  const lineEnd = end === -1 ? value.length : end
-  const lineContent = value.slice(lineStart, lineEnd)
-  const newLine = prefix + lineContent
-  const newValue = value.slice(0, lineStart) + newLine + value.slice(lineEnd)
-  const storeKey = tab.value.markdownMode === 'split' ? splitTextarea : editTextareaValue
-  storeKey.value = newValue
-  nextTick(() => {
-    const newPos = lineStart + newLine.length
-    el.selectionStart = newPos
-    el.selectionEnd = newPos
-    el.focus({ preventScroll: true } as any)
-    autoResize(el)
-    updateTextareaContent()
-    if (scrollContainer) {
-      requestAnimationFrame(() => {
-        scrollContainer.scrollTop = savedScrollTop
-      })
-    }
-  })
-}
-
-function updateTextareaContent() {
-  if (!tab.value) return
-  if (tab.value.markdownMode === 'split') {
-    editorStore.updateContent(props.tabId, splitTextarea.value)
-  } else if (tab.value.markdownMode === 'edit') {
-    editorStore.updateContent(props.tabId, editTextareaValue.value)
-  }
-}
-
-function toggleBold() {
-  if (isTextareaMode()) { textareaWrap('**', '**'); return }
-  if (!editorView) return
-  exec(toggleMark(editorView.state.schema.marks.strong))
-}
-
-function toggleItalic() {
-  if (isTextareaMode()) { textareaWrap('*', '*'); return }
-  if (!editorView) return
-  exec(toggleMark(editorView.state.schema.marks.emphasis))
-}
-
-function toggleStrikethrough() {
-  if (isTextareaMode()) { textareaWrap('~~', '~~'); return }
-  if (!editorView) return
-  const strike = editorView.state.schema.marks.strike_through
-  if (strike) exec(toggleMark(strike))
-}
-
-function toggleInlineCode() {
-  if (isTextareaMode()) { textareaWrap('`', '`'); return }
-  if (!editorView) return
-  exec(toggleMark(editorView.state.schema.marks.inlineCode))
-}
-
-function setHeading(level: number) {
-  if (isTextareaMode()) { textareaLinePrefix('#'.repeat(level) + ' '); return }
-  if (!editorView) return
-  exec(setBlockType(editorView.state.schema.nodes.heading, { level }))
-}
-
-function toggleBulletList() {
-  if (isTextareaMode()) { textareaLinePrefix('- '); return }
-  if (!editorView) return
-  exec(wrapIn(editorView.state.schema.nodes.bullet_list))
-}
-
-function toggleOrderedList() {
-  if (isTextareaMode()) { textareaLinePrefix('1. '); return }
-  if (!editorView) return
-  exec(wrapIn(editorView.state.schema.nodes.ordered_list))
-}
-
-function toggleBlockquote() {
-  if (isTextareaMode()) { textareaLinePrefix('> '); return }
-  if (!editorView) return
-  exec(wrapIn(editorView.state.schema.nodes.blockquote))
-}
-
-function insertLink() {
-  if (isTextareaMode()) {
-    const el = getActiveTextarea()
-    if (!el || !tab.value) return
-    const selected = el.value.slice(el.selectionStart, el.selectionEnd)
-    linkTextInput.value = selected
-    linkUrlInput.value = ''
-    linkInsertMode = 'textarea'
-    showLinkModal.value = true
-    return
-  }
-  if (!editorView) return
-  const { from, to } = editorView.state.selection
-  const selected = from < to ? editorView.state.doc.textBetween(from, to) : ''
-  linkTextInput.value = selected
-  linkUrlInput.value = ''
-  linkInsertMode = 'wysiwyg'
-  showLinkModal.value = true
-}
-
-function confirmInsertLink() {
-  const text = linkTextInput.value
-  const url = linkUrlInput.value
-  if (!url) return
-  if (!text) return
-
-  if (linkInsertMode === 'textarea') {
-    const el = getActiveTextarea()
-    if (!el || !tab.value) return
-    const scrollContainer = getScrollContainer(el)
-    const savedScrollTop = scrollContainer?.scrollTop ?? 0
-    const start = el.selectionStart
-    const end = el.selectionEnd
-    const value = el.value
-    const replacement = '[' + text + '](' + url + ')'
-    const newValue = value.slice(0, start) + replacement + value.slice(end)
-    const storeKey = tab.value.markdownMode === 'split' ? splitTextarea : editTextareaValue
-    storeKey.value = newValue
-    nextTick(() => {
-      const pos = start + replacement.length
-      el.selectionStart = pos
-      el.selectionEnd = pos
-      el.focus({ preventScroll: true } as any)
-      autoResize(el)
-      updateTextareaContent()
-      if (scrollContainer) {
-        requestAnimationFrame(() => {
-          scrollContainer.scrollTop = savedScrollTop
-        })
-      }
-    })
-  } else if (linkInsertMode === 'wysiwyg') {
-    if (!editorView) return
-    const { state, dispatch } = editorView
-    const { from, to } = state.selection
-    let tr = state.tr
-    if (from < to) {
-      tr = tr.delete(from, to)
-    }
-    tr = tr.insertText(text, from)
-    const linkMark = state.schema.marks.link?.create({ href: url })
-    if (linkMark) {
-      tr = tr.addMark(from, from + text.length, linkMark)
-    }
-    dispatch(tr.scrollIntoView())
-    editorView.dom.focus({ preventScroll: true } as any)
-  }
-
-  showLinkModal.value = false
-  linkInsertMode = null
-}
-
-function cancelInsertLink() {
-  showLinkModal.value = false
-  linkInsertMode = null
-}
-
-function insertHorizontalRule() {
-  if (isTextareaMode()) { textareaLinePrefix('---\n'); return }
-  if (!editorView) return
-  const { state, dispatch } = editorView
-  const hr = state.schema.nodes.horizontal_rule || state.schema.nodes.hr
-  if (!hr) return
-  const tr = state.tr.replaceSelectionWith(hr.create()).scrollIntoView()
-  dispatch(tr)
-  editorView.dom.focus({ preventScroll: true } as any)
-}
-
-function handleEditTextareaInput() {
-  if (!tab.value) return
-  editorStore.updateContent(props.tabId, editTextareaValue.value)
-  autoResize(editTextareaEl.value)
-}
-
-function handleSplitTextareaInput() {
-  if (!tab.value) return
-  editorStore.updateContent(props.tabId, splitTextarea.value)
-  autoResize(splitTextareaEl.value)
-  updateSplitPreview()
-}
-
-async function handleSave() {
-  try {
-    await editorStore.saveFile(props.tabId)
-    justSaved.value = true
-    setTimeout(() => {
-      justSaved.value = false
-    }, 2000)
-  } catch (err) {
-    message.error(t('editor.message.saveFailed', { error: String(err) }))
-  }
-}
+const isDirty = computed(() => {
+  if (!tab.value) return false
+  return editorStore.isTabDirty(tab.value)
+})
 
 const shortcutLabels: Record<string, string> = {
   bold: 'Ctrl+B',
@@ -534,7 +140,7 @@ const shortcutLabels: Record<string, string> = {
 }
 
 function isWysiwygFocused(): boolean {
-  return !!editorRootEl.value?.contains(document.activeElement)
+  return !!document.querySelector('.ProseMirror-focused')
 }
 
 interface ShortcutDef {
@@ -546,18 +152,18 @@ interface ShortcutDef {
 }
 
 const shortcutDefs: ShortcutDef[] = [
-  { ctrl: true, shift: false, key: 'b', action: toggleBold, milkdown: true },
-  { ctrl: true, shift: false, key: 'i', action: toggleItalic, milkdown: true },
-  { ctrl: true, shift: true,  key: 'b', action: toggleBlockquote, milkdown: true },
-  { ctrl: true, shift: true,  key: 'x', action: toggleStrikethrough, milkdown: false },
-  { ctrl: true, shift: false, key: '`', action: toggleInlineCode, milkdown: false },
-  { ctrl: true, shift: false, key: '1', action: () => setHeading(1), milkdown: false },
-  { ctrl: true, shift: false, key: '2', action: () => setHeading(2), milkdown: false },
-  { ctrl: true, shift: false, key: '3', action: () => setHeading(3), milkdown: false },
-  { ctrl: true, shift: true,  key: 'u', action: toggleBulletList, milkdown: false },
-  { ctrl: true, shift: true,  key: 'o', action: toggleOrderedList, milkdown: false },
-  { ctrl: true, shift: false, key: 'k', action: insertLink, milkdown: false },
-  { ctrl: true, shift: true,  key: 'h', action: insertHorizontalRule, milkdown: false },
+  { ctrl: true, shift: false, key: 'b', action: () => commands.toggleBold(), milkdown: true },
+  { ctrl: true, shift: false, key: 'i', action: () => commands.toggleItalic(), milkdown: true },
+  { ctrl: true, shift: true, key: 'b', action: () => commands.toggleBlockquote(), milkdown: true },
+  { ctrl: true, shift: true, key: 'x', action: () => commands.toggleStrikethrough(), milkdown: false },
+  { ctrl: true, shift: false, key: '`', action: () => commands.toggleInlineCode(), milkdown: false },
+  { ctrl: true, shift: false, key: '1', action: () => commands.setHeading(1), milkdown: false },
+  { ctrl: true, shift: false, key: '2', action: () => commands.setHeading(2), milkdown: false },
+  { ctrl: true, shift: false, key: '3', action: () => commands.setHeading(3), milkdown: false },
+  { ctrl: true, shift: true, key: 'u', action: () => commands.toggleBulletList(), milkdown: false },
+  { ctrl: true, shift: true, key: 'o', action: () => commands.toggleOrderedList(), milkdown: false },
+  { ctrl: true, shift: false, key: 'k', action: () => openLinkModal(), milkdown: false },
+  { ctrl: true, shift: true, key: 'h', action: () => commands.insertHorizontalRule(), milkdown: false },
 ]
 
 function handleKeydown(e: KeyboardEvent) {
@@ -585,36 +191,12 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-const isDirty = ref(false)
-watch(
-  () => tab.value,
-  (val) => {
-    if (val) {
-      isDirty.value = editorStore.isTabDirty(val)
-    }
-  },
-  { deep: true },
-)
-
-onMounted(async () => {
+onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
-  tab.value = editorStore.tabs.find((t) => t.id === props.tabId) ?? null
-  if (tab.value) {
-    await nextTick()
-    await initMode()
-    restoreScrollPosition()
-  }
-})
-
-onBeforeUnmount(() => {
-  saveScrollPosition()
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
-  destroyEditor()
-  destroySplitPreview()
-  destroyPreview()
 })
 </script>
 
@@ -624,7 +206,7 @@ onUnmounted(() => {
       <n-button-group size="small" v-show="tab.markdownMode !== 'preview'">
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="toggleBold">
+            <n-button strong secondary round size="small" @click="commands.toggleBold()">
               <n-icon :component="TextBold24Regular" :size="18" />
             </n-button>
           </template>
@@ -632,7 +214,7 @@ onUnmounted(() => {
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="toggleItalic">
+            <n-button strong secondary round size="small" @click="commands.toggleItalic()">
               <n-icon :component="TextItalic24Regular" :size="18" />
             </n-button>
           </template>
@@ -640,7 +222,7 @@ onUnmounted(() => {
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="toggleStrikethrough">
+            <n-button strong secondary round size="small" @click="commands.toggleStrikethrough()">
               <n-icon :component="TextStrikethrough24Regular" :size="18" />
             </n-button>
           </template>
@@ -648,7 +230,7 @@ onUnmounted(() => {
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="toggleInlineCode">
+            <n-button strong secondary round size="small" @click="commands.toggleInlineCode()">
               <n-icon :component="Code24Regular" :size="18" />
             </n-button>
           </template>
@@ -659,7 +241,7 @@ onUnmounted(() => {
       <n-button-group size="small" v-show="tab.markdownMode !== 'preview'">
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="setHeading(1)">
+            <n-button strong secondary round size="small" @click="commands.setHeading(1)">
               <n-icon :component="TextHeader124Regular" :size="18" />
             </n-button>
           </template>
@@ -667,7 +249,7 @@ onUnmounted(() => {
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="setHeading(2)">
+            <n-button strong secondary round size="small" @click="commands.setHeading(2)">
               <n-icon :component="TextHeader220Regular" :size="18" />
             </n-button>
           </template>
@@ -675,7 +257,7 @@ onUnmounted(() => {
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="setHeading(3)">
+            <n-button strong secondary round size="small" @click="commands.setHeading(3)">
               <n-icon :component="TextHeader320Regular" :size="18" />
             </n-button>
           </template>
@@ -686,7 +268,7 @@ onUnmounted(() => {
       <n-button-group size="small" v-show="tab.markdownMode !== 'preview'">
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="toggleBulletList">
+            <n-button strong secondary round size="small" @click="commands.toggleBulletList()">
               <n-icon :component="TextBulletListSquare24Regular" :size="18" />
             </n-button>
           </template>
@@ -694,7 +276,7 @@ onUnmounted(() => {
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="toggleOrderedList">
+            <n-button strong secondary round size="small" @click="commands.toggleOrderedList()">
               <n-icon :component="TextNumberListLtr24Regular" :size="18" />
             </n-button>
           </template>
@@ -702,7 +284,7 @@ onUnmounted(() => {
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="toggleBlockquote">
+            <n-button strong secondary round size="small" @click="commands.toggleBlockquote()">
               <n-icon :component="TextQuote24Regular" :size="18" />
             </n-button>
           </template>
@@ -710,7 +292,7 @@ onUnmounted(() => {
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="insertLink">
+            <n-button strong secondary round size="small" @click="openLinkModal">
               <n-icon :component="Link24Regular" :size="18" />
             </n-button>
           </template>
@@ -718,7 +300,7 @@ onUnmounted(() => {
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button strong secondary round size="small" @click="insertHorizontalRule">
+            <n-button strong secondary round size="small" @click="commands.insertHorizontalRule()">
               <n-icon :component="LineHorizontal320Regular" :size="18" />
             </n-button>
           </template>
@@ -766,47 +348,34 @@ onUnmounted(() => {
     </div>
 
     <div class="editor-content" v-show="tab.markdownMode === 'wysiwyg'">
-      <n-scrollbar style="height: 100%">
-        <div ref="editorRootEl" class="milkdown-wrapper" />
-      </n-scrollbar>
+      <WysiwygEditor
+        ref="wysiwygRef"
+        :tabId="tabId"
+        :active="tab.markdownMode === 'wysiwyg'"
+      />
     </div>
 
-    <div class="editor-content split-layout" v-show="tab.markdownMode === 'split'">
-      <div class="split-pane">
-        <n-scrollbar style="height: 100%">
-          <textarea
-            ref="splitTextareaEl"
-            v-model="splitTextarea"
-            @input="handleSplitTextareaInput"
-            class="markdown-textarea"
-            spellcheck="false"
-          />
-        </n-scrollbar>
-      </div>
-      <div class="split-divider" />
-      <div class="split-pane">
-        <n-scrollbar style="height: 100%">
-          <div ref="splitPreviewEl" class="milkdown-wrapper" />
-        </n-scrollbar>
-      </div>
+    <div class="editor-content" v-show="tab.markdownMode === 'split'">
+      <SplitEditor
+        ref="splitRef"
+        :tabId="tabId"
+        :active="tab.markdownMode === 'split'"
+      />
     </div>
 
     <div class="editor-content" v-show="tab.markdownMode === 'edit'">
-      <n-scrollbar style="height: 100%">
-        <textarea
-          ref="editTextareaEl"
-          v-model="editTextareaValue"
-          @input="handleEditTextareaInput"
-          class="markdown-textarea"
-          spellcheck="false"
-        />
-      </n-scrollbar>
+      <TextareaEditor
+        ref="editRef"
+        :tabId="tabId"
+        :active="tab.markdownMode === 'edit'"
+      />
     </div>
 
     <div class="editor-content" v-show="tab.markdownMode === 'preview'">
-      <n-scrollbar style="height: 100%">
-        <div ref="previewRootEl" class="milkdown-wrapper" />
-      </n-scrollbar>
+      <PreviewEditor
+        :tabId="tabId"
+        :active="tab.markdownMode === 'preview'"
+      />
     </div>
 
     <n-modal v-model:show="showLinkModal" preset="card"
@@ -853,59 +422,5 @@ onUnmounted(() => {
 .editor-content {
   flex: 1;
   overflow: hidden;
-}
-
-.milkdown-wrapper {
-  min-height: 100%;
-  padding: 16px 24px;
-}
-
-.split-layout {
-  display: flex;
-  flex-direction: row;
-  overflow: hidden;
-}
-
-.split-pane {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-}
-
-.split-divider {
-  width: 1px;
-  background: var(--n-border-color);
-  flex-shrink: 0;
-}
-
-.markdown-textarea {
-  display: block;
-  width: 100%;
-  min-height: 100%;
-  border: none;
-  outline: none;
-  resize: none;
-  overflow: hidden;
-  padding: 16px;
-  font-family: 'Consolas', 'Cascadia Code', 'Courier New', monospace;
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--n-text-color);
-  background: var(--n-color);
-  tab-size: 4;
-}
-
-:deep(.milkdown) {
-  max-width: 820px;
-  margin: 0 auto;
-}
-
-:deep(.milkdown .ProseMirror) {
-  outline: none;
-  min-height: calc(100vh - 200px);
-}
-
-:deep(.milkdown .editor) {
-  min-height: calc(100vh - 200px);
 }
 </style>
