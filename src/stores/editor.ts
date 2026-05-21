@@ -1,3 +1,9 @@
+/**
+ * @file Editor state Pinia store.
+ * Manages open editor tabs, file content, markdown mode switching,
+ * auto-save, scroll position persistence, and session restore via
+ * the Tauri Store plugin.
+ */
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
@@ -6,20 +12,36 @@ import { error, trace } from '@tauri-apps/plugin-log'
 import { useSettingsStore } from '@/stores/settings'
 import { useRepositoriesStore } from './repositories'
 
+/** Available editing modes for markdown files. */
 export type MarkdownMode = 'wysiwyg' | 'split' | 'edit' | 'preview'
 
+/**
+ * Represents an open editor tab.
+ */
 export interface Tab {
+  /** Unique tab identifier. */
   id: string
+  /** Repository name this file belongs to. */
   repoName: string
+  /** File path relative to the repository root. */
   filePath: string
+  /** Display name (filename only). */
   fileName: string
+  /** Whether the file is a markdown file. */
   isMarkdown: boolean
+  /** Current editable content in the editor. */
   content: string
+  /** Last saved version of the content (used for dirty detection). */
   savedContent: string
+  /** Active editing mode for markdown tabs. */
   markdownMode: MarkdownMode
+  /** Scroll position preserved across tab switches. */
   scrollTop: number
 }
 
+/**
+ * Subset of {@link Tab} fields persisted to disk for session restore.
+ */
 interface PersistedTab {
   id: string
   repoName: string
@@ -30,41 +52,76 @@ interface PersistedTab {
   scrollTop: number
 }
 
+/** Monotonically increasing counter for generating unique tab IDs. */
 let tabCounter = 0
 
+/**
+ * Generates a unique tab identifier.
+ * @returns A string in the format `tab-{timestamp}-{counter}`.
+ */
 function generateTabId(): string {
   tabCounter++
   return `tab-${Date.now()}-${tabCounter}`
 }
 
+/**
+ * Determines whether a file is a markdown file by its extension.
+ * @param fileName - The file name to check.
+ * @returns `true` if the file has a markdown extension.
+ */
 function isMarkdownFile(fileName: string): boolean {
   const lower = fileName.toLowerCase()
   return lower.endsWith('.md') || lower.endsWith('.mdx') || lower.endsWith('.markdown')
 }
 
+/**
+ * Pinia store for editor state.
+ * Handles tab management, file I/O, auto-save, and session persistence.
+ */
 export const useEditorStore = defineStore('editor', () => {
+  /** All currently open editor tabs. */
   const tabs = ref<Tab[]>([])
+  /** ID of the currently active tab, or null if no tabs are open. */
   const activeTabId = ref<string | null>(null)
+  /** Timer for the auto-save interval. */
   let autoSaveTimer: ReturnType<typeof setInterval> | null = null
+  /** Reference to the Tauri persistent store for session restore. */
   let store: Store | null = null
+  /** Reference to the repositories store for status updates. */
   let repositoriesStore = useRepositoriesStore();
 
+  /** The currently active tab object (derived from activeTabId). */
   const activeTab = ref<Tab | null>(null)
 
   watch(activeTabId, (id) => {
     activeTab.value = tabs.value.find((t) => t.id === id) ?? null
   })
 
+  /** Clears all tabs when switching to a different repository. */
   watch(() => repositoriesStore.selectedRepository, (oldRepo, newRepo) => {
     if (oldRepo?.name != newRepo?.name) {
       clearAllTabs();
     }
   })
 
+  /**
+   * Checks whether a tab has unsaved changes.
+   * @param tab - The tab to check.
+   * @returns `true` if the content differs from the last saved version.
+   */
   function isTabDirty(tab: Tab): boolean {
     return tab.content !== tab.savedContent
   }
 
+  /**
+   * Opens a file from a repository into a new or existing editor tab.
+   * Reads file content from disk via the Tauri backend.
+   *
+   * @param repoName - The repository name.
+   * @param filePath - The relative file path within the repository.
+   * @param fileName - The display name for the tab.
+   * @returns The tab ID of the opened file.
+   */
   async function openFile(
     repoName: string,
     filePath: string,
@@ -100,6 +157,11 @@ export const useEditorStore = defineStore('editor', () => {
     return tab.id
   }
 
+  /**
+   * Closes a tab by its ID. If the closed tab was active, activates
+   * the nearest remaining tab.
+   * @param tabId - The ID of the tab to close.
+   */
   function closeTab(tabId: string): void {
     const idx = tabs.value.findIndex((t) => t.id === tabId)
     if (idx === -1) return
@@ -116,12 +178,21 @@ export const useEditorStore = defineStore('editor', () => {
     }
   }
 
+  /**
+   * Sets the active tab by ID.
+   * @param tabId - The ID of the tab to activate.
+   */
   function setActiveTab(tabId: string): void {
     if (tabs.value.some((t) => t.id === tabId)) {
       activeTabId.value = tabId
     }
   }
 
+  /**
+   * Updates the content of a tab in memory (does not save to disk).
+   * @param tabId - The tab to update.
+   * @param content - The new content string.
+   */
   function updateContent(tabId: string, content: string): void {
     const tab = tabs.value.find((t) => t.id === tabId)
     if (tab) {
@@ -129,6 +200,12 @@ export const useEditorStore = defineStore('editor', () => {
     }
   }
 
+  /**
+   * Saves a tab's content to disk via the Tauri backend.
+   * Marks the tab as clean and updates the repository's sync status.
+   *
+   * @param tabId - The tab to save.
+   */
   async function saveFile(tabId: string): Promise<void> {
     const tab = tabs.value.find((t) => t.id === tabId)
     if (!tab) return
@@ -146,6 +223,13 @@ export const useEditorStore = defineStore('editor', () => {
     }
   }
 
+  /**
+   * Sets the markdown editing mode for a tab (wysiwyg, split, edit, preview).
+   * Only applies to markdown files.
+   *
+   * @param tabId - The tab to update.
+   * @param mode - The new editing mode.
+   */
   function setMarkdownMode(tabId: string, mode: MarkdownMode): void {
     const tab = tabs.value.find((t) => t.id === tabId)
     if (tab && tab.isMarkdown) {
@@ -153,11 +237,16 @@ export const useEditorStore = defineStore('editor', () => {
     }
   }
 
+  /** Closes all open tabs. */
   function clearAllTabs(): void {
     tabs.value = []
     activeTabId.value = null
   }
 
+  /**
+   * Starts the auto-save timer.
+   * Periodically saves any dirty tabs at the interval defined in settings.
+   */
   function startAutoSave(): void {
     stopAutoSave()
     const settingsStore = useSettingsStore()
@@ -176,6 +265,7 @@ export const useEditorStore = defineStore('editor', () => {
     }, intervalMs)
   }
 
+  /** Stops the auto-save timer. */
   function stopAutoSave(): void {
     if (autoSaveTimer !== null) {
       clearInterval(autoSaveTimer)
@@ -190,6 +280,11 @@ export const useEditorStore = defineStore('editor', () => {
     },
   )
 
+  /**
+   * Converts a Tab to its persistable form (without content).
+   * @param tab - The full tab object.
+   * @returns A {@link PersistedTab} with content stripped.
+   */
   function toPersistedTab(tab: Tab): PersistedTab {
     return {
       id: tab.id,
@@ -202,6 +297,10 @@ export const useEditorStore = defineStore('editor', () => {
     }
   }
 
+  /**
+   * Persists the current editor state (open tabs and active tab) to disk.
+   * Content is NOT persisted; only tab metadata and scroll positions are saved.
+   */
   async function persistEditorState() {
     if (!store) return
     const persistedTabs: PersistedTab[] = tabs.value.map(toPersistedTab)
@@ -220,6 +319,10 @@ export const useEditorStore = defineStore('editor', () => {
     }, 300)
   }, { deep: true })
 
+  /**
+   * Restores the editor session from disk on application launch.
+   * Re-reads file content from disk for each persisted tab.
+   */
   async function initialize() {
     try {
       store = await Store.load('editor.json')
@@ -266,6 +369,11 @@ export const useEditorStore = defineStore('editor', () => {
     }
   }
 
+  /**
+   * Sets the scroll position for a tab.
+   * @param tabId - The tab to update.
+   * @param scrollTop - The vertical scroll offset in pixels.
+   */
   function setTabScrollTop(tabId: string, scrollTop: number): void {
     const tab = tabs.value.find((t) => t.id === tabId)
     if (tab) {

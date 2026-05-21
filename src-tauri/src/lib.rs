@@ -1,7 +1,28 @@
+//! Vertext — A Git-backed Markdown notebook built with Tauri.
+//!
+//! Each workspace is stored as a Git repository under the app data
+//! directory. The application provides a WYSIWYG Markdown editor with
+//! automatic version history, multi-device synchronization via a
+//! device-branch strategy, and credential storage in the OS keyring.
+
+/// Tauri command handlers exposed to the frontend.
 pub mod command;
+/// Filesystem traversal utilities for repository tree display.
 pub mod fs;
+/// Git repository abstraction built on [`git2`].
 pub mod repository;
 
+/// Starts the Tauri application.
+///
+/// Configures the keyring backend, sets up logging via
+/// [`tauri_plugin_log`] (trace level in debug, info in release),
+/// registers all frontend-invokable commands, attaches the store and
+/// opener plugins, and opens developer tools in debug builds.
+///
+/// # Panics
+///
+/// Panics if the Tauri runtime fails to start, if the log plugin
+/// cannot be initialized, or if the fern dispatcher setup fails.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]

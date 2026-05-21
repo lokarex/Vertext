@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * Repository file tree drawer that displays the directory/file hierarchy of the
+ * selected repository. Supports file selection, rename, delete, new file/folder,
+ * and refresh operations with modal confirmation dialogs.
+ */
 import { NDrawer, NDrawerContent, NIcon, NButtonGroup, NTree, NModal, NInput, NSpace, NTooltip, NButton, NSpin, NScrollbar, useMessage } from 'naive-ui'
 import { ref, watch, computed, h, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
@@ -18,23 +23,35 @@ const navigationStore = useNavigationStore()
 const editorStore = useEditorStore()
 const message = useMessage()
 
+/** Currently selected tree node key (file/directory path) */
 const selectedFileEntryKey = ref<string | null>(null)
 
+/** Root-level file entries of the repository tree */
 const fileTree = ref<FileEntry[]>([])
+/** Indicates the tree is being loaded from the backend */
 const isLoading = ref(false)
+/** Error message if the last tree load failed */
 const loadError = ref<string | null>(null)
 
+/** Controls visibility of the rename entry modal */
 const showRenameModal = ref(false)
+/** New name input value for the rename modal */
 const renameNewName = ref('')
 
+/** Controls visibility of the new file modal */
 const showNewFileModal = ref(false)
+/** File name input value for the new file modal */
 const newFileName = ref('')
 
+/** Controls visibility of the new folder modal */
 const showNewFolderModal = ref(false)
+/** Folder name input value for the new folder modal */
 const newFolderName = ref('')
 
+/** Controls visibility of the delete confirmation modal */
 const showDeleteModal = ref(false)
 
+/** Opens the rename modal and pre-fills the input with the currently selected node's label */
 function openRenameModal() {
   const node = findNodeByKey(fileTree.value, selectedFileEntryKey.value!)
   if (node) {
@@ -43,6 +60,10 @@ function openRenameModal() {
   }
 }
 
+/**
+ * Renames the selected tree entry on the backend and updates local tree state.
+ * Marks the repository as unsynced if it was previously synced.
+ */
 async function confirmRename() {
   const name = renameNewName.value.trim()
   if (!name) {
@@ -79,6 +100,10 @@ async function confirmRename() {
   }
 }
 
+/**
+ * Loads the file tree for a given repository from the backend.
+ * @param repoName - Name of the repository to load
+ */
 async function loadFileTree(repoName: string) {
   isLoading.value = true
   loadError.value = null
@@ -93,6 +118,11 @@ async function loadFileTree(repoName: string) {
   }
 }
 
+/**
+ * Handles tree node selection. If the selected node is a leaf (file),
+ * opens it in the editor and navigates to the editor view.
+ * @param keys - Array of selected tree keys
+ */
 async function handleFileEntrySelect(keys: string[]) {
   if (keys.length > 0) {
     selectedFileEntryKey.value = keys[0]
@@ -114,6 +144,7 @@ async function handleFileEntrySelect(keys: string[]) {
   }
 }
 
+/** Watches the selected repository and loads its file tree, opening the drawer on change */
 const stopWatcher = watch(() => repositoriesStore.selectedRepository, (newRepo) => {
   if (newRepo) {
     loadFileTree(newRepo.name)
@@ -126,14 +157,22 @@ const stopWatcher = watch(() => repositoriesStore.selectedRepository, (newRepo) 
   }
 }, { immediate: true })
 
+/** Whether the rename button should be disabled (no selection) */
 const renameDisabled = computed(() => selectedFileEntryKey.value == null)
+/** Whether the delete button should be disabled (no selection) */
 const deleteDisabled = computed(() => selectedFileEntryKey.value == null)
+/** Indicates an in-progress manual refresh operation */
 const isRefreshing = ref(false)
 
+/** Opens the delete confirmation modal for the currently selected entry */
 function openDeleteModal() {
   showDeleteModal.value = true
 }
 
+/**
+ * Deletes the selected tree entry on the backend and removes it from the local tree.
+ * Marks the repository as unsynced if it was previously synced.
+ */
 async function confirmDelete() {
   const node = findNodeByKey(fileTree.value, selectedFileEntryKey.value!)
   if (!node) {
@@ -155,6 +194,7 @@ async function confirmDelete() {
   }
 }
 
+/** Reloads the file tree from the backend and resets the current selection */
 async function refreshFileTree() {
   if (!repositoriesStore.selectedRepository || isRefreshing.value) return
   isRefreshing.value = true
@@ -169,11 +209,16 @@ async function refreshFileTree() {
   }
 }
 
+/** Opens the new file modal, resetting the input value */
 function openNewFileModal() {
   newFileName.value = ''
   showNewFileModal.value = true
 }
 
+/**
+ * Creates a new file entry in the selected directory on the backend and
+ * appends it to the local tree. Marks the repository as unsynced.
+ */
 async function confirmNewFile() {
   const name = newFileName.value.trim()
   if (!name) {
@@ -202,11 +247,16 @@ async function confirmNewFile() {
   }
 }
 
+/** Opens the new folder modal, resetting the input value */
 function openNewFolderModal() {
   newFolderName.value = ''
   showNewFolderModal.value = true
 }
 
+/**
+ * Creates a new directory entry in the selected directory on the backend and
+ * appends it to the local tree. Marks the repository as unsynced.
+ */
 async function confirmNewFolder() {
   const name = newFolderName.value.trim()
   if (!name) {
@@ -235,6 +285,7 @@ async function confirmNewFolder() {
   }
 }
 
+/** Stops the selected repository watcher when the component is destroyed */
 onUnmounted(() => {
   stopWatcher()
 })

@@ -1,22 +1,54 @@
+/**
+ * @file Editor formatting commands composable.
+ * Provides dual-mode formatting operations that work in both
+ * plain textarea (markdown syntax injection) and ProseMirror
+ * WYSIWYG (schema-based commands) environments.
+ *
+ * @see {@link https://prosemirror.net/docs/ref/#commands}
+ */
 import { nextTick } from 'vue'
 import type { EditorView } from 'prosemirror-view'
 import { toggleMark, setBlockType, wrapIn } from 'prosemirror-commands'
 
+/**
+ * Context dependencies injected into the editor commands composable
+ * from the parent MarkdownEditor component.
+ */
 interface EditorCommandsContext {
+  /** Returns the current ProseMirror EditorView, or null if unavailable. */
   getEditorView: () => EditorView | null
+  /** Returns the current textarea element, or null in WYSIWYG mode. */
   getTextareaElement: () => HTMLTextAreaElement | null
+  /** Whether the editor is currently in plain-text textarea mode. */
   isTextareaMode: () => boolean
+  /** Returns the scroll container element for a given editor element. */
   getScrollContainer: (el: HTMLElement) => HTMLElement | null
 }
 
+/**
+ * Adjusts a textarea's height to fit its content.
+ * @param el - The textarea element to resize.
+ */
 function autoResize(el: HTMLTextAreaElement) {
   el.style.height = 'auto'
   el.style.height = el.scrollHeight + 'px'
 }
 
+/**
+ * Composable providing markdown formatting commands for the editor.
+ * Each command works in both textarea and WYSIWYG modes, dispatching
+ * to the appropriate implementation internally.
+ *
+ * @param ctx - Context providing access to editor view, textarea, and mode detection.
+ * @returns An object with formatting command functions.
+ */
 export function useEditorCommands(ctx: EditorCommandsContext) {
   const { getEditorView, getTextareaElement, isTextareaMode, getScrollContainer } = ctx
 
+  /**
+   * Executes a ProseMirror command in WYSIWYG mode.
+   * @param cmd - A ProseMirror command function (e.g. toggleMark).
+   */
   function execWysiwyg(cmd: (state: any, dispatch?: any) => boolean) {
     const view = getEditorView()
     if (!view) return
@@ -24,6 +56,11 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     view.dom.focus({ preventScroll: true } as any)
   }
 
+  /**
+   * Wraps the selected text in the textarea with a prefix and suffix.
+   * @param prefix - Text to insert before the selection.
+   * @param suffix - Text to insert after the selection.
+   */
   function textareaWrap(prefix: string, suffix: string) {
     const el = getTextareaElement()
     if (!el) return
@@ -48,6 +85,10 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     })
   }
 
+  /**
+   * Prepends a prefix to the current line in the textarea.
+   * @param prefix - Text to insert at the start of the current line.
+   */
   function textareaLinePrefix(prefix: string) {
     const el = getTextareaElement()
     if (!el) return
@@ -75,6 +116,7 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     })
   }
 
+  /** Toggles bold (strong) formatting. */
   function toggleBold() {
     if (isTextareaMode()) { textareaWrap('**', '**'); return }
     const view = getEditorView()
@@ -82,6 +124,7 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     execWysiwyg(toggleMark(view.state.schema.marks.strong))
   }
 
+  /** Toggles italic (emphasis) formatting. */
   function toggleItalic() {
     if (isTextareaMode()) { textareaWrap('*', '*'); return }
     const view = getEditorView()
@@ -89,6 +132,7 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     execWysiwyg(toggleMark(view.state.schema.marks.emphasis))
   }
 
+  /** Toggles strikethrough formatting. */
   function toggleStrikethrough() {
     if (isTextareaMode()) { textareaWrap('~~', '~~'); return }
     const view = getEditorView()
@@ -97,6 +141,7 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     if (strike) execWysiwyg(toggleMark(strike))
   }
 
+  /** Toggles inline code formatting. */
   function toggleInlineCode() {
     if (isTextareaMode()) { textareaWrap('`', '`'); return }
     const view = getEditorView()
@@ -104,6 +149,10 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     execWysiwyg(toggleMark(view.state.schema.marks.inlineCode))
   }
 
+  /**
+   * Sets the current block to a heading level.
+   * @param level - Heading level (1-6).
+   */
   function setHeading(level: number) {
     if (isTextareaMode()) { textareaLinePrefix('#'.repeat(level) + ' '); return }
     const view = getEditorView()
@@ -111,6 +160,7 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     execWysiwyg(setBlockType(view.state.schema.nodes.heading, { level }))
   }
 
+  /** Toggles bullet (unordered) list formatting. */
   function toggleBulletList() {
     if (isTextareaMode()) { textareaLinePrefix('- '); return }
     const view = getEditorView()
@@ -118,6 +168,7 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     execWysiwyg(wrapIn(view.state.schema.nodes.bullet_list))
   }
 
+  /** Toggles ordered (numbered) list formatting. */
   function toggleOrderedList() {
     if (isTextareaMode()) { textareaLinePrefix('1. '); return }
     const view = getEditorView()
@@ -125,6 +176,7 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     execWysiwyg(wrapIn(view.state.schema.nodes.ordered_list))
   }
 
+  /** Toggles blockquote formatting. */
   function toggleBlockquote() {
     if (isTextareaMode()) { textareaLinePrefix('> '); return }
     const view = getEditorView()
@@ -132,6 +184,10 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     execWysiwyg(wrapIn(view.state.schema.nodes.blockquote))
   }
 
+  /**
+   * Returns the currently selected text in either textarea or WYSIWYG mode.
+   * @returns The selected text string, or an empty string if nothing is selected.
+   */
   function getSelectedText(): string {
     if (isTextareaMode()) {
       const el = getTextareaElement()
@@ -144,6 +200,13 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     return from < to ? view.state.doc.textBetween(from, to) : ''
   }
 
+  /**
+   * Inserts a markdown link at the current selection.
+   * If text is selected, it becomes the link text; otherwise a placeholder is used.
+   *
+   * @param text - The link display text.
+   * @param url - The link target URL.
+   */
   function insertLinkAtSelection(text: string, url: string) {
     if (isTextareaMode()) {
       const el = getTextareaElement()
@@ -186,6 +249,7 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     view.dom.focus({ preventScroll: true } as any)
   }
 
+  /** Inserts a horizontal rule (`---`) at the current position. */
   function insertHorizontalRule() {
     if (isTextareaMode()) { textareaLinePrefix('---\n'); return }
     const view = getEditorView()

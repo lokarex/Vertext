@@ -1,3 +1,10 @@
+/**
+ * @file Repository management Pinia store.
+ * Provides CRUD operations for Git repositories including local
+ * initialization, remote cloning, configuration, synchronization,
+ * and deletion. Credentials are stored in the OS keychain via
+ * the Tauri password API.
+ */
 import { defineStore } from "pinia";
 import { Store } from "@tauri-apps/plugin-store";
 import { ref } from "vue";
@@ -5,27 +12,53 @@ import { invoke } from '@tauri-apps/api/core';
 import { debug, error, trace } from '@tauri-apps/plugin-log';
 import type { Repository, RepositoryStatus } from '@/models/Repository';
 
+/**
+ * Retrieves a password from the OS keychain for the given user/service.
+ * @param user - The service identifier (typically the repository name).
+ * @returns The stored password, or null if not found.
+ */
 async function getPassword(user: string): Promise<string | null> {
     return invoke('get_password', { service: 'vertext', user });
 }
+/**
+ * Stores a password in the OS keychain.
+ * @param user - The service identifier.
+ * @param password - The password to store.
+ */
 async function setPassword(user: string, password: string): Promise<void> {
     await invoke('set_password', { service: 'vertext', user, password });
 }
+/**
+ * Deletes a password from the OS keychain.
+ * @param user - The service identifier.
+ */
 async function deletePassword(user: string): Promise<void> {
     await invoke('delete_password', { service: 'vertext', user });
 }
 
+/**
+ * Pinia store for repository lifecycle management.
+ * All changes are persisted to `repositories.json` via Tauri's Store plugin.
+ */
 export const useRepositoriesStore = defineStore('repositories', () => {
+    /** Reference to the Tauri persistent store. */
     let store: Store | null = null;
 
+    /** Array of managed repositories. */
     const repositories = ref<Repository[]>([]);
+    /** The currently selected repository, or null. */
     const selectedRepository = ref<Repository | null>(null);
+    /** Whether the file tree drawer is open. */
     const fileTreeOpen = ref(false);
 
+    /** Toggles the file tree drawer visibility. */
     function toggleFileTree() {
         fileTreeOpen.value = !fileTreeOpen.value
     }
 
+    /**
+     * Loads persisted repositories and the last selected repository from disk.
+     */
     async function initialize() {
         try {
             trace('Initializing repositories manager...');
@@ -51,6 +84,10 @@ export const useRepositoriesStore = defineStore('repositories', () => {
 
     initialize();
 
+    /**
+     * Creates a new local (non-remote) Git repository.
+     * @param repoName - The name for the new repository.
+     */
     async function initLocalRepository(repoName: string) {
         try {
             await invoke('init_local_repository', { repoName });
@@ -63,6 +100,15 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         }
     }
 
+    /**
+     * Clones a remote Git repository.
+     * The repository name is auto-derived from the URL if not provided.
+     *
+     * @param remoteUrl - The remote repository URL to clone.
+     * @param repoName - Optional custom name (defaults to URL-derived name).
+     * @param userName - Optional authentication username.
+     * @param password - Optional authentication password (stored in keychain).
+     */
     async function cloneRemoteRepository(remoteUrl: string, repoName?: string, userName?: string, password?: string) {
         try {
             const resolvedRepoName = repoName || (remoteUrl.split('/').pop() || '').replace(/\.git$/, '');
@@ -85,6 +131,16 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         }
     }
 
+    /**
+     * Configures or updates remote connection details for a repository.
+     * Setting all three values (url, username, password) marks the repo as `'unsynced'`.
+     * Clearing them reverts to `'unconfigured'`.
+     *
+     * @param repoName - The repository to configure.
+     * @param remoteUrl - The remote origin URL.
+     * @param userName - Authentication username.
+     * @param password - Authentication password (stored in keychain).
+     */
     async function configureRepository(repoName: string, remoteUrl: string | null, userName: string | null, password: string | null) {
         const repository = repositories.value.find(repo => repo.name === repoName)!;
 
@@ -109,6 +165,10 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         await store?.save();
     }
 
+    /**
+     * Permanently deletes a repository (local directory and stored credentials).
+     * @param repoName - The repository to delete.
+     */
     async function deleteRepository(repoName: string) {
         try {
             await invoke('delete_repository', { repoName });
@@ -122,6 +182,13 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         }
     }
 
+    /**
+     * Synchronizes a repository with its remote (commit + fetch + merge + push).
+     * Requires the repository to be fully configured with credentials.
+     *
+     * @param repoName - The repository to sync.
+     * @throws {Error} If the repository is not configured or has no stored password.
+     */
     async function syncRepository(repoName: string) {
         try {
             const repo = repositories.value.find(r => r.name === repoName);
@@ -151,6 +218,11 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         }
     }
 
+    /**
+     * Updates the sync status of a repository and persists it.
+     * @param repoName - The repository to update.
+     * @param status - The new status value.
+     */
     async function setStatus(repoName: string, status: RepositoryStatus) {
         const repo = repositories.value.find(r => r.name === repoName);
         if (repo) {
@@ -160,6 +232,12 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         }
     }
 
+    /**
+     * Selects a repository by name and persists the selection.
+     * Pass `null` to deselect.
+     *
+     * @param repoName - The repository name to select, or null.
+     */
     function selectRepository(repoName: string | null) {
         if (repoName === null) {
             selectedRepository.value = null;

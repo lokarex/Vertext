@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * Settings page for configuring theme, language, font size, and auto-save interval.
+ * All settings are persisted through the settings store and applied globally.
+ */
 import { useSettingsStore, Theme } from '@/stores/settings';
 import { NSelect, SelectOption, NInputNumber, NCard, NDivider, NScrollbar } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
@@ -6,8 +10,10 @@ import { computed } from 'vue';
 
 const { t } = useI18n();
 
+/** Reactive reference to the application settings store. */
 const settingsStore = useSettingsStore();
 
+/** Theme selection options (dark/light). */
 const themeOptions = computed(() => [
     {
         value: 'darkTheme',
@@ -19,16 +25,26 @@ const themeOptions = computed(() => [
     },
 ]);
 
+/**
+ * Handles theme selection changes.
+ * @param value - The selected theme value key.
+ * @param _options - Unused select option metadata.
+ */
 function handleThemeChange(value: string, _options: SelectOption) {
     settingsStore.setTheme(value as Theme);
 }
 
+/**
+ * Handles font size changes with validation.
+ * @param value - The new font size in pixels, or null if cleared.
+ */
 function handleFontSizeChange(value: number | null) {
     if (value !== null) {
         settingsStore.setFontSize(value)
     }
 }
 
+/** Language selection options (English, Simplified Chinese). */
 const languageOptions = computed(() => [
     {
         value: 'en',
@@ -40,10 +56,19 @@ const languageOptions = computed(() => [
     },
 ]);
 
+/**
+ * Handles language selection changes.
+ * @param value - The selected locale code ('en' or 'zh-CN').
+ * @param _options - Unused select option metadata.
+ */
 function handleLanguageChange(value: "en" | "zh-CN", _options: SelectOption) {
     settingsStore.setLanguage(value);
 }
 
+/**
+ * Handles auto-save interval changes with validation.
+ * @param value - The new interval in seconds, or null if cleared.
+ */
 function handleAutoSaveIntervalChange(value: number | null) {
     if (value !== null) {
         settingsStore.setAutoSaveInterval(value)

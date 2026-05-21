@@ -1,3 +1,9 @@
+/**
+ * @file Milkdown markdown editor composable.
+ * Provides lifecycle management ({@link create}, {@link destroy})
+ * for a Milkdown editor instance with GFM, clipboard, history,
+ * cursor, and listener plugins.
+ */
 import { shallowRef } from 'vue'
 import { Editor, rootCtx, defaultValueCtx, editorViewOptionsCtx, editorViewCtx } from '@milkdown/core'
 import { commonmark } from '@milkdown/kit/preset/commonmark'
@@ -9,15 +15,35 @@ import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
 import { nord } from '@milkdown/theme-nord'
 import type { EditorView } from 'prosemirror-view'
 
+/**
+ * Options for creating a Milkdown editor instance.
+ */
 export interface MilkdownEditorOptions {
+  /** Whether the editor content is user-editable. */
   editable: boolean
+  /** Optional callback invoked whenever the markdown content changes. */
   onUpdate?: (markdown: string) => void
 }
 
+/**
+ * A composable that manages a Milkdown editor lifecycle.
+ *
+ * @returns An object with {@link create}, {@link destroy}, and the {@link editorView} shallow ref.
+ */
 export function useMilkdownEditor() {
+  /** The Milkdown {@link Editor} instance. */
   const instance = shallowRef<Editor | null>(null)
+  /** The underlying ProseMirror {@link EditorView}. */
   const editorView = shallowRef<EditorView | null>(null)
 
+  /**
+   * Creates a new Milkdown editor inside the given container.
+   * Destroys any previous instance first.
+   *
+   * @param container - The DOM element to render the editor into.
+   * @param content - Initial markdown string content.
+   * @param options - Editor configuration options.
+   */
   async function create(container: HTMLElement, content: string, options: MilkdownEditorOptions): Promise<void> {
     await destroy()
 
@@ -49,6 +75,9 @@ export function useMilkdownEditor() {
     })
   }
 
+  /**
+   * Destroys the current editor instance and cleans up resources.
+   */
   async function destroy() {
     if (instance.value) {
       await instance.value.destroy(true).catch(() => {})

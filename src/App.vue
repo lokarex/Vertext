@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * Root Vue component that configures the Naive UI theme provider,
+ * manages view routing via the navigation store, and renders the
+ * appropriate view (editor, repository list, or settings) alongside
+ * the global header and file tree drawer.
+ */
 import SettingsPage from "@/views/SettingsPage.vue";
 import { darkTheme, lightTheme, NConfigProvider, NGlobalStyle, NMessageProvider } from 'naive-ui';
 import type { GlobalTheme, GlobalThemeOverrides } from 'naive-ui';
@@ -10,14 +16,18 @@ import { useNavigationStore } from '@/stores/navigation';
 import RepositoryList from '@/views/RepositoryList.vue';
 import Editor from '@/views/Editor.vue';
 
+/** Reactive reference to the navigation store for view selection. */
 const navigationStore = useNavigationStore();
+/** Reactive reference to the settings store for theme and preferences. */
 const settingsStore = useSettingsStore();
 
+/** Maps theme keys from the settings store to Naive UI GlobalTheme instances. */
 const themeMap: Record<Exclude<Theme, null>, GlobalTheme> = {
   'lightTheme': lightTheme,
   'darkTheme': darkTheme,
 };
 
+/** Computed theme overrides derived from the settings store (e.g. font size). */
 const themeOverrides = computed<GlobalThemeOverrides>(() => ({
   common: {
     fontSize: settingsStore.fontSize + 'px',

@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * Repository listing page with a create modal for local and remote repositories.
+ * Displays all existing repositories as cards and allows creating new ones
+ * through a modal dialog that supports authentication for remote repos.
+ */
 import { NButton, NModal, NInput, NSelect, NSpace, NIcon, NScrollbar, NCheckbox } from 'naive-ui';
 import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -9,18 +14,29 @@ import RepositoryCard from '@/components/RepositoryCard.vue';
 const { t } = useI18n();
 const repositoriesStore = useRepositoriesStore();
 
+/** Whether the create repository modal is visible. */
 const showModal = ref(false);
+/** Type of repository to create: local or remote. */
 const repoType = ref<'local' | 'remote'>('local');
+/** Options for the repository type selector. */
 const repoTypeOptions = computed(() => [
     { label: t('repository.label.localType'), value: 'local' },
     { label: t('repository.label.remoteType'), value: 'remote' },
 ]);
+/** Name for the new repository. */
 const repoName = ref('');
+/** Remote URL for cloning (used when repoType is 'remote'). */
 const remoteUrl = ref('');
+/** Whether the remote repository requires authentication. */
 const requiresAuth = ref(false);
+/** Username for remote repository authentication. */
 const userName = ref('');
+/** Password for remote repository authentication. */
 const password = ref('');
 
+/**
+ * Opens the create repository modal and resets all form fields to defaults.
+ */
 function openModal() {
     repoType.value = 'local';
     repoName.value = '';
@@ -31,10 +47,18 @@ function openModal() {
     showModal.value = true;
 }
 
+/**
+ * Closes the create repository modal.
+ */
 function closeModal() {
     showModal.value = false;
 }
 
+/**
+ * Creates a new repository based on the current form state.
+ * For local repos, initializes with the given name.
+ * For remote repos, clones with optional authentication credentials.
+ */
 function createRepository() {
     if (repoType.value === 'local') {
         if (repoName.value.trim()) {

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * Expandable repository card component showing repository status, sync controls,
+ * commit history with restore capability, and configuration/delete actions.
+ */
 import { computed, ref } from 'vue';
 import { NCard, NIcon, NButton, NModal, NInput, NSpace, NAlert, NProgress, NTimeline, NTimelineItem, NTag, NScrollbar, NTooltip, useMessage } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
@@ -10,16 +14,27 @@ import { listen } from '@tauri-apps/api/event';
 import { error } from '@tauri-apps/plugin-log';
 import { invoke } from '@tauri-apps/api/core';
 
+/**
+ * Props for the expandable repository card.
+ * @property repository - The repository data to display
+ * @property width - Optional CSS width of the card (defaults to '340px')
+ */
 interface RepositoryCardProps {
     repository: Repository;
     width?: string;
 }
+/**
+ * @property repository - The repository data to display
+ * @property width - Optional card width (default '340px')
+ */
 const props = withDefaults(defineProps<RepositoryCardProps>(), {
     width: '340px'
 });
 
 const repositoriesStore = useRepositoriesStore();
+/** Whether this repository card is currently selected in the store */
 const isSelected = computed(() => repositoriesStore.selectedRepository?.name == props.repository.name);
+/** Selects this repository (or deselects if already selected) in the global store */
 const handleClick = () => {
     if (isSelected.value) {
         repositoriesStore.selectRepository(null);
@@ -31,31 +46,52 @@ const handleClick = () => {
 
 const { t } = useI18n();
 
+/** Whether the expanded actions panel is visible */
 const isExpanded = ref(false);
+/** Controls visibility of the delete confirmation modal */
 const showDeleteConfirmModal = ref(false);
+/** Controls visibility of the remote configuration modal */
 const showConfigModal = ref(false);
+/** Remote Git URL input value for configuration */
 const configRemoteUrl = ref('');
+/** User name input value for configuration */
 const configUserName = ref('');
+/** Password/token input value for configuration */
 const configPassword = ref('');
+/** Error message to display in the configuration modal */
 const configErrorMessage = ref('');
+/** Indicates a sync operation is in progress */
 const isSyncing = ref(false);
+/** Sync operation progress percentage (0-100) */
 const syncProgress = ref(0);
+/** Current sync step description text */
 const syncStep = ref('');
+/** Error message from the last failed sync operation */
 const syncError = ref('');
+/** Whether the commit history panel is visible */
 const showHistory = ref(false);
+/** Loaded commit history entries for this repository */
 const historyCommits = ref<CommitInfo[]>([]);
+/** Indicates commit history is being loaded */
 const historyLoading = ref(false);
+/** Target commit OID for the restore confirmation flow */
 const restoreTargetOid = ref<string | null>(null);
 
+/** Toggles the expanded state of the actions panel */
 const handleToggleExpand = () => {
     isExpanded.value = !isExpanded.value;
 };
 
+/** Deletes this repository from the store after confirmation */
 const handleDelete = () => {
     showDeleteConfirmModal.value = false;
     repositoriesStore.deleteRepository(props.repository.name);
 };
 
+/**
+ * Initiates a git sync (commit + pull + push) for this repository.
+ * Listens to `sync-progress` events to update the progress bar and status text.
+ */
 const handleSync = async () => {
     if (isSyncing.value) return;
 
@@ -121,6 +157,9 @@ const handleSync = async () => {
     }
 };
 
+/**
+ * Toggles the commit history panel. On first open, loads history from the backend.
+ */
 const handleToggleHistory = async () => {
     showHistory.value = !showHistory.value;
     if (showHistory.value && historyCommits.value.length === 0) {
@@ -137,12 +176,21 @@ const handleToggleHistory = async () => {
     }
 };
 
+/**
+ * Formats a UNIX timestamp (seconds) to a human-readable datetime string.
+ * @param timestamp - UNIX timestamp in seconds
+ * @returns Formatted string like "2025-01-15 14:30:00"
+ */
 function formatCommitTime(timestamp: number): string {
     const d = new Date(timestamp * 1000);
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+/**
+ * Restores the repository to a previously selected commit, then refreshes history
+ * and marks the repository as unsynced.
+ */
 async function handleConfirmRestore() {
     const oid = restoreTargetOid.value;
     if (!oid) return;
@@ -162,8 +210,10 @@ async function handleConfirmRestore() {
     }
 }
 
+/** Naive UI message instance for user notifications */
 const messageRef = useMessage();
 
+/** Opens the remote configuration modal, pre-filling existing values */
 const handleConfigureRemote = () => {
     configRemoteUrl.value = props.repository.remoteUrl || '';
     configUserName.value = props.repository.userName || '';
@@ -172,6 +222,7 @@ const handleConfigureRemote = () => {
     showConfigModal.value = true;
 };
 
+/** Persists the remote configuration (URL, username, password) via the store */
 const handleSaveConfig = async () => {
     configErrorMessage.value = '';
     await repositoriesStore.configureRepository(
@@ -183,10 +234,12 @@ const handleSaveConfig = async () => {
     showConfigModal.value = false;
 };
 
+/** Closes the configuration modal without saving */
 const handleCancelConfig = () => {
     showConfigModal.value = false;
 };
 
+/** Human-readable status label derived from the repository's current status */
 const statusText = computed(() => {
     switch (props.repository.status) {
         case 'synced': return t('repository.label.synced');
@@ -196,6 +249,7 @@ const statusText = computed(() => {
     }
 });
 
+/** Color associated with the repository's current status (green/yellow/gray) */
 const statusColor = computed(() => {
     switch (props.repository.status) {
         case 'synced': return '#18a058';

@@ -1,11 +1,18 @@
 <script setup lang="ts">
+/**
+ * Application header bar with branding, navigation, and settings controls.
+ * Provides the Vertext logo (links to repository list), a file-tree toggle button
+ * when a repository is selected, a settings button, and a back-navigation button.
+ */
 import { NCard, NGradientText, NButton, NButtonGroup, NIcon } from 'naive-ui';
 import { PanelLeftExpand16Regular, Settings20Regular } from '@vicons/fluent'
 import { ReturnDownBackSharp } from '@vicons/ionicons5';
 import { useRepositoriesStore } from '@/stores/repositories';
 import { useNavigationStore } from '@/stores/navigation';
 
+/** Pinia store for the currently selected repository and file-tree state. */
 const repositoriesStore = useRepositoriesStore();
+/** Pinia store for view navigation and history stack. */
 const navigationStore = useNavigationStore();
 </script>
 

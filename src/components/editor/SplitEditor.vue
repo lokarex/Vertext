@@ -1,35 +1,57 @@
 <script setup lang="ts">
+/**
+ * Split pane editor component with textarea and live preview.
+ * Displays a raw markdown textarea alongside a rendered Milkdown preview pane
+ * with synchronized content and scroll position management.
+ */
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { NScrollbar } from 'naive-ui'
 import { useEditorStore } from '@/stores/editor'
 import { useMilkdownEditor } from '@/composables/useMilkdownEditor'
 import { useEditorScroll } from '@/composables/useEditorScroll'
 
+/**
+ * @property {string} tabId - Unique identifier of the editor tab.
+ * @property {boolean} active - Whether this editor is the currently active tab.
+ */
 const props = defineProps<{
   tabId: string
   active: boolean
 }>()
 
 const editorStore = useEditorStore()
+/** Reference to the native textarea element (left pane). */
 const textareaEl = ref<HTMLTextAreaElement>()
+/** Reference to the preview container element (right pane). */
 const previewEl = ref<HTMLDivElement>()
+/** Current markdown content bound to the textarea. */
 const value = ref('')
 
 const { create, destroy } = useMilkdownEditor()
 const { saveScroll, restoreScroll } = useEditorScroll(props.tabId)
 
+/**
+ * Resizes the textarea height to fit its content.
+ */
 function autoResize() {
   if (!textareaEl.value) return
   textareaEl.value.style.height = 'auto'
   textareaEl.value.style.height = textareaEl.value.scrollHeight + 'px'
 }
 
+/**
+ * Handles textarea input: persists content, resizes, and refreshes the preview pane.
+ */
 function handleInput() {
   editorStore.updateContent(props.tabId, value.value)
   autoResize()
   updatePreview()
 }
 
+/**
+ * Re-renders the preview pane with the current markdown content
+ * using a read-only Milkdown editor.
+ */
 async function updatePreview() {
   if (!previewEl.value) return
   await destroy()
@@ -37,12 +59,24 @@ async function updatePreview() {
   await create(previewEl.value, value.value, { editable: false })
 }
 
+/**
+ * Returns the native textarea element reference from the left pane.
+ * @returns {HTMLTextAreaElement | null} The textarea DOM element, or null if not mounted.
+ */
 function getTextarea(): HTMLTextAreaElement | null {
   return textareaEl.value ?? null
 }
 
+/**
+ * Exposed methods available to the parent component.
+ * @method getTextarea - Returns the native textarea element.
+ */
 defineExpose({ getTextarea })
 
+/**
+ * Initializes both panes: loads tab content into the textarea, auto-resizes,
+ * restores scroll position, and renders the preview.
+ */
 async function init() {
   const tab = editorStore.tabs.find((t) => t.id === props.tabId)
   if (!tab) return
@@ -53,10 +87,16 @@ async function init() {
   await updatePreview()
 }
 
+/**
+ * Initializes the editor on mount if this tab is already active.
+ */
 onMounted(async () => {
   if (props.active) await init()
 })
 
+/**
+ * Watches the active state to initialize on activation and tear down on deactivation.
+ */
 watch(
   () => props.active,
   async (val, oldVal) => {
@@ -70,6 +110,9 @@ watch(
   },
 )
 
+/**
+ * Saves scroll position and destroys the Milkdown preview before unmount.
+ */
 onBeforeUnmount(async () => {
   if (props.active && textareaEl.value) {
     saveScroll(textareaEl.value)

@@ -3,27 +3,58 @@ use std::path::Path;
 use log::trace;
 use serde::Serialize;
 
+/// Metadata for a single commit in the repository history.
+///
+/// Returned by [`Repository::history`] for display in the frontend
+/// commit timeline.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitInfo {
+    /// Shortened OID (first 7 hex characters) for display.
     pub oid: String,
+    /// Full 40-character hex OID of the commit.
     pub full_oid: String,
+    /// First line of the commit message.
     pub message: String,
+    /// Name of the commit author.
     pub author: String,
+    /// Commit timestamp in seconds since the Unix epoch.
     pub time: i64,
+    /// Local and remote branch names that point to this commit.
     pub branches: Vec<String>,
+    /// Tag names that point to this commit.
     pub tags: Vec<String>,
+    /// `true` if this commit is the current `HEAD`.
     pub is_head: bool,
 }
 
+/// A local Git repository augmented with remote credentials and
+/// convenience methods for the Vertext sync workflow.
+///
+/// Wraps a [`git2::Repository`] and stores optional remote URL,
+/// username, and password for authenticated operations.
 pub struct Repository {
+    // The underlying libgit2 repository handle.
     inner: git2::Repository,
+    // Optional HTTPS remote URL for push/fetch operations.
     remote_url: Option<String>,
+    // Optional username for HTTP basic authentication.
     user_name: Option<String>,
+    // Optional password for HTTP basic authentication.
     password: Option<String>,
 }
 
 impl Repository {
+    /// Opens an existing repository at `path`.
+    ///
+    /// The returned repository has no remote credentials configured.
+    /// Use [`open_with_remote`](Self::open_with_remote) if the
+    /// repository needs to communicate with a remote.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the directory does not contain a valid
+    /// Git repository.
     pub fn open(path: &Path) -> Result<Self, String> {
         let inner = git2::Repository::open(path).map_err(|e| e.to_string())?;
         Ok(Self {
@@ -34,6 +65,15 @@ impl Repository {
         })
     }
 
+    /// Opens a repository and configures remote credentials.
+    ///
+    /// The `remote_url`, `user_name`, and `password` are stored
+    /// for use by [`fetch_all_branches`](Self::fetch_all_branches)
+    /// and [`push_all_branches`](Self::push_all_branches).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the repository cannot be opened.
     pub fn open_with_remote(
         path: &Path,
         remote_url: &str,
@@ -47,6 +87,19 @@ impl Repository {
         Ok(repo)
     }
 
+    /// Ensures a local branch exists and is checked out.
+    ///
+    /// If the branch already exists, `HEAD` is switched to it.
+    /// Otherwise the branch is created from the current `HEAD`
+    /// (or as an unborn branch if there are no commits yet).
+    ///
+    /// Also sets `user.name` and `user.email` in the repository
+    /// config to the branch name for commit attribution.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the branch cannot be created, checked
+    /// out, or the config cannot be updated.
     pub fn ensure_branch(&self, branch_name: &str) -> Result<(), String> {
         let branch_ref = format!("refs/heads/{}", branch_name);
         trace!("Ensuring branch: {}", branch_name);
@@ -94,6 +147,13 @@ impl Repository {
         Ok(())
     }
 
+    /// Checks whether the working tree has uncommitted changes.
+    ///
+    /// Includes untracked files but excludes ignored files.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the status cannot be computed.
     pub fn has_uncommitted_changes(&self) -> Result<bool, String> {
         let mut options = git2::StatusOptions::new();
         options.include_untracked(true);
@@ -102,6 +162,17 @@ impl Repository {
         Ok(!statuses.is_empty())
     }
 
+    /// Stages and commits all changes in the working tree.
+    ///
+    /// Adds all files (including untracked ones) to the index,
+    /// then creates a commit with the message `"Auto-sync commit"`.
+    /// If the branch is unborn (no commits yet), an initial commit
+    /// with no parents is created.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if staging, tree building, or committing
+    /// fails.
     pub fn commit_all(&self) -> Result<(), String> {
         trace!("Committing all changes...");
         let mut index = self.inner.index().map_err(|e| e.to_string())?;
@@ -140,6 +211,15 @@ impl Repository {
         Ok(())
     }
 
+    /// Fetches all branches from the configured remote.
+    ///
+    /// Uses HTTP basic authentication with the stored credentials.
+    /// TLS certificate verification is skipped.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the remote URL or credentials are not
+    /// configured, or if the fetch operation fails.
     pub fn fetch_all_branches(&self) -> Result<(), String> {
         trace!("Fetching all branches from remote...");
 
@@ -183,6 +263,16 @@ impl Repository {
         Ok(())
     }
 
+    /// Finds the most recent commit across all local and remote branches.
+    ///
+    /// Scans every reference under `refs/heads/` and `refs/remotes/`,
+    /// comparing commit timestamps to identify the latest one.
+    /// The OID and reference name of the latest commit are returned.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no commits are found in the repository
+    /// or if reference iteration fails.
     pub fn latest_commit(&self) -> Result<(git2::Oid, String), String> {
         trace!("Finding latest commit across all branches...");
 
@@ -223,6 +313,23 @@ impl Repository {
         Ok((latest_oid, latest_ref_name))
     }
 
+    /// Merges a commit into `HEAD` using the *theirs* strategy.
+    ///
+    /// The merge strategy is determined by analysis:
+    ///
+    /// - **Up-to-date**: no merge needed, returns immediately.
+    /// - **Fast-forward**: moves `HEAD` directly to `their_oid`
+    ///   and updates the working tree.
+    /// - **Normal merge**: creates a merge commit whose tree exactly
+    ///   matches `their_oid` (theirs strategy), then checks it out.
+    ///
+    /// This approach ensures the remote latest always wins when
+    /// there is no clean fast-forward path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the merge analysis cannot be performed,
+    /// the fast-forward fails, or the merge commit and checkout fail.
     pub fn merge_theirs(&self, their_oid: git2::Oid) -> Result<(), String> {
         trace!("Merging commit {} with theirs strategy...", their_oid);
 
@@ -310,6 +417,17 @@ impl Repository {
         ))
     }
 
+    /// Pushes all local branches to the configured remote.
+    ///
+    /// Iterates over every local branch and pushes it to
+    /// `refs/heads/<name>` on the remote using the stored
+    /// credentials for authentication.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the remote URL or credentials are not
+    /// configured, if there are no local branches, or if the
+    /// push operation fails.
     pub fn push_all_branches(&self) -> Result<(), String> {
         trace!("Pushing all branches to remote...");
 
@@ -368,6 +486,16 @@ impl Repository {
         Ok(())
     }
 
+    /// Configures the `origin` remote for the repository.
+    ///
+    /// If `origin` already exists and its URL matches the configured
+    /// URL, nothing is done. If the URL differs, it is updated.
+    /// If `origin` does not exist, it is created.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the remote URL is not configured or if
+    /// the remote cannot be created or updated.
     pub fn setup_remote(&self) -> Result<(), String> {
         let url = self
             .remote_url
@@ -392,6 +520,12 @@ impl Repository {
         Ok(())
     }
 
+    /// Returns the OID of the current `HEAD`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `HEAD` cannot be resolved or has no
+    /// target (unborn branch).
     pub fn head_oid(&self) -> Result<git2::Oid, String> {
         self.inner
             .head()
@@ -400,6 +534,17 @@ impl Repository {
             .ok_or_else(|| "HEAD has no target".to_string())
     }
 
+    /// Returns the commit history reachable from all branches.
+    ///
+    /// Traverses every commit under `refs/heads/*` and
+    /// `refs/remotes/*`, annotating each commit with the branch
+    /// and tag names that point to it. The current `HEAD` commit
+    /// is flagged with `is_head: true`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the revision walk or reference
+    /// iteration fails.
     pub fn history(&self) -> Result<Vec<CommitInfo>, String> {
         let mut revwalk = self.inner.revwalk().map_err(|e| e.to_string())?;
         revwalk.push_glob("refs/heads/*").map_err(|e| e.to_string())?;
@@ -459,6 +604,17 @@ impl Repository {
         Ok(commits)
     }
 
+    /// Restores the working tree to the state of a historical commit.
+    ///
+    /// Creates a new *restore commit* on the current branch whose
+    /// tree matches `target_oid`, with parents being both the
+    /// current `HEAD` and the target commit. This preserves the
+    /// full history — no commits are lost or rewritten.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the target commit cannot be found, the
+    /// tree cannot be read, or the restore commit and checkout fail.
     pub fn restore_to(&self, target_oid: git2::Oid) -> Result<(), String> {
         let target_commit = self.inner.find_commit(target_oid).map_err(|e| e.to_string())?;
         let target_tree = target_commit.tree().map_err(|e| e.to_string())?;

@@ -1,23 +1,40 @@
 <script setup lang="ts">
+/**
+ * Syntax-highlighted code viewer for an individual editor tab.
+ * Resolves the language from the file extension, preserves/restores
+ * scroll position across tab switches, and displays a header with
+ * the file name and detected language.
+ */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { NCode, NScrollbar } from 'naive-ui'
 import { useEditorStore } from '@/stores/editor'
 
+/** @property tabId - Unique identifier of the editor tab whose content to display. */
 const props = defineProps<{
   tabId: string
 }>()
 
+/** Pinia store managing open editor tabs, content, and scroll state. */
 const editorStore = useEditorStore()
 
+/** The editor tab object matching the given `tabId`, or `null` if not found. */
 const tab = computed(() => editorStore.tabs.find((t) => t.id === props.tabId) ?? null)
+/** The text content of the current tab, or an empty string. */
 const code = computed(() => tab.value?.content ?? '')
+/** The resolved language identifier for syntax highlighting, derived from the file name. */
 const language = computed(() => {
   if (!tab.value) return 'text'
   return getLanguageFromFileName(tab.value.fileName)
 })
 
+/** Template ref bound to the scrollable code body container. */
 const bodyRef = ref<HTMLElement>()
 
+/**
+ * Walks the DOM to locate the inner scrollable container inside the
+ * `<n-scrollbar>` wrapper, or `null` if not yet rendered.
+ * @returns The `.n-scrollbar-container` HTMLElement or `null`.
+ */
 function getScrollContainer(): HTMLElement | null {
   if (!bodyRef.value) return null
   const scrollbar = bodyRef.value.querySelector('.n-scrollbar')
@@ -25,6 +42,10 @@ function getScrollContainer(): HTMLElement | null {
   return scrollbar.querySelector('.n-scrollbar-container') as HTMLElement | null
 }
 
+/**
+ * Persists the current vertical scroll position to the editor store
+ * so it can be restored when the tab is revisited.
+ */
 function saveScrollTop() {
   const container = getScrollContainer()
   if (container) {
@@ -32,6 +53,10 @@ function saveScrollTop() {
   }
 }
 
+/**
+ * Restores a previously saved vertical scroll position for this tab
+ * after the next DOM update, if a stored position exists.
+ */
 function restoreScrollTop() {
   const t = tab.value
   if (!t || t.scrollTop <= 0) return
@@ -43,8 +68,13 @@ function restoreScrollTop() {
   })
 }
 
+/** Scroll event listener reference for cleanup on unmount. */
 let scrollHandler: (() => void) | null = null
 
+/**
+ * Lifecycle: attaches a passive scroll listener to persist scroll position
+ * and restores any previously saved scroll position for the active tab.
+ */
 onMounted(() => {
   nextTick(() => {
     const container = getScrollContainer()
@@ -56,6 +86,10 @@ onMounted(() => {
   })
 })
 
+/**
+ * Lifecycle: saves the current scroll position and removes the scroll
+ * listener before the component is destroyed.
+ */
 onBeforeUnmount(() => {
   saveScrollTop()
   if (scrollHandler) {
@@ -67,6 +101,13 @@ onBeforeUnmount(() => {
   }
 })
 
+/**
+ * Maps a file name extension to a language identifier string used by
+ * the `<n-code>` syntax highlighter.
+ * @param fileName - The file name whose extension determines the language.
+ * @returns A language identifier string (e.g. `'typescript'`, `'python'`),
+ *          defaulting to `'text'`.
+ */
 function getLanguageFromFileName(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase() ?? ''
   const map: Record<string, string> = {

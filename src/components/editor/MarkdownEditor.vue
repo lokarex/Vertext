@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * Markdown editor toolbar component providing formatting buttons,
+ * mode switching (wysiwyg / split / edit / preview), keyboard shortcuts,
+ * save functionality, and link insertion modal.
+ */
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { Component } from 'vue'
 import { NButton, NButtonGroup, NIcon, NTooltip, NModal, NInput, NSpace, useMessage } from 'naive-ui'
@@ -30,6 +35,7 @@ import SplitEditor from './SplitEditor.vue'
 import TextareaEditor from './TextareaEditor.vue'
 import PreviewEditor from './PreviewEditor.vue'
 
+/** @property tabId - Unique identifier of the editor tab to manage */
 const props = defineProps<{
   tabId: string
 }>()
@@ -38,28 +44,37 @@ const { t } = useI18n()
 const editorStore = useEditorStore()
 const message = useMessage()
 
+/** Currently active tab data computed from the editor store */
 const tab = computed(() => editorStore.tabs.find((t) => t.id === props.tabId) ?? null)
 
+/** Ref to the WysiwygEditor child component instance */
 const wysiwygRef = ref<InstanceType<typeof WysiwygEditor>>()
+/** Ref to the SplitEditor child component instance */
 const splitRef = ref<InstanceType<typeof SplitEditor>>()
+/** Ref to the TextareaEditor child component instance */
 const editRef = ref<InstanceType<typeof TextareaEditor>>()
 
+/** Retrieves the ProseMirror editor view from the wysiwyg child, or null if unavailable */
 const getEditorView = () => wysiwygRef.value?.getEditorView() ?? null
+/** Retrieves the raw textarea element based on current mode (split or edit), or null */
 const getTextareaElement = () => {
   if (!tab.value) return null
   if (tab.value.markdownMode === 'split') return splitRef.value?.getTextarea() ?? null
   if (tab.value.markdownMode === 'edit') return editRef.value?.getTextarea() ?? null
   return null
 }
+/** Returns true when the current tab is in split or edit mode (textarea-based modes) */
 const isTextareaModeFn = () =>
   tab.value ? (['split', 'edit'] as MarkdownMode[]).includes(tab.value.markdownMode) : false
 
+/** Finds the closest scroll container element from a given descendant element */
 function getScrollContainer(el: HTMLElement): HTMLElement | null {
   const scrollbar = el.closest('.n-scrollbar')
   if (!scrollbar) return null
   return scrollbar.querySelector('.n-scrollbar-container') as HTMLElement | null
 }
 
+/** Composition of editor format commands adapted for wysiwyg and textarea modes */
 const commands = useEditorCommands({
   getEditorView,
   getTextareaElement,
@@ -67,18 +82,24 @@ const commands = useEditorCommands({
   getScrollContainer,
 })
 
+/** Indicates the file was just saved; used to show a brief checkmark icon */
 const justSaved = ref(false)
 
+/** Controls visibility of the insert-link modal */
 const showLinkModal = ref(false)
+/** Text label for the link being inserted */
 const linkTextInput = ref('')
+/** URL target for the link being inserted */
 const linkUrlInput = ref('')
 
+/** Opens the link insertion modal, pre-filling text with the current editor selection */
 function openLinkModal() {
   linkTextInput.value = commands.getSelectedText()
   linkUrlInput.value = ''
   showLinkModal.value = true
 }
 
+/** Inserts a markdown link at the cursor/selection with the given text and URL from the modal */
 function confirmInsertLink() {
   const text = linkTextInput.value
   const url = linkUrlInput.value
@@ -87,10 +108,12 @@ function confirmInsertLink() {
   showLinkModal.value = false
 }
 
+/** Closes the link modal without inserting anything */
 function cancelInsertLink() {
   showLinkModal.value = false
 }
 
+/** Saves the current tab's content to the filesystem via the editor store */
 async function handleSave() {
   try {
     await editorStore.saveFile(props.tabId)
@@ -103,11 +126,20 @@ async function handleSave() {
   }
 }
 
+/**
+ * Switches the current tab to the given editing mode.
+ * @param mode - Target MarkdownMode to switch to
+ */
 function setMode(mode: MarkdownMode) {
   if (!tab.value) return
   editorStore.setMarkdownMode(props.tabId, mode)
 }
 
+/**
+ * Returns the icon component corresponding to a given markdown mode.
+ * @param mode - Target MarkdownMode
+ * @returns The Fluent icon Component for that mode
+ */
 function modeIcon(mode: MarkdownMode): Component {
   const icons: Record<MarkdownMode, Component> = {
     wysiwyg: DocumentEdit24Regular,
@@ -118,11 +150,13 @@ function modeIcon(mode: MarkdownMode): Component {
   return icons[mode]
 }
 
+/** Whether the current tab has unsaved modifications */
 const isDirty = computed(() => {
   if (!tab.value) return false
   return editorStore.isTabDirty(tab.value)
 })
 
+/** Human-readable keyboard shortcut labels for toolbar tooltips */
 const shortcutLabels: Record<string, string> = {
   bold: 'Ctrl+B',
   italic: 'Ctrl+I',
@@ -139,10 +173,19 @@ const shortcutLabels: Record<string, string> = {
   save: 'Ctrl+S',
 }
 
+/** Checks whether the wysiwyg ProseMirror editor currently has focus */
 function isWysiwygFocused(): boolean {
   return !!document.querySelector('.ProseMirror-focused')
 }
 
+/**
+ * Defines a keyboard shortcut with modifiers and an action.
+ * @property ctrl - Requires Ctrl/Meta modifier
+ * @property shift - Requires Shift modifier
+ * @property key - Expected key (lowercase)
+ * @property action - Callback to invoke when the shortcut is matched
+ * @property milkdown - If true, delegate to milkdown's native handler when wysiwyg is focused
+ */
 interface ShortcutDef {
   ctrl: boolean
   shift: boolean
@@ -151,6 +194,7 @@ interface ShortcutDef {
   milkdown: boolean
 }
 
+/** Registered keyboard shortcut definitions with modifier keys, actions, and milkdown delegation flags */
 const shortcutDefs: ShortcutDef[] = [
   { ctrl: true, shift: false, key: 'b', action: () => commands.toggleBold(), milkdown: true },
   { ctrl: true, shift: false, key: 'i', action: () => commands.toggleItalic(), milkdown: true },
@@ -166,6 +210,10 @@ const shortcutDefs: ShortcutDef[] = [
   { ctrl: true, shift: true, key: 'h', action: () => commands.insertHorizontalRule(), milkdown: false },
 ]
 
+/**
+ * Global keyboard handler dispatching shortcuts: Ctrl+S saves, others invoke formatting commands.
+ * @param e - The native KeyboardEvent
+ */
 function handleKeydown(e: KeyboardEvent) {
   const ctrl = e.ctrlKey || e.metaKey
 
@@ -191,10 +239,12 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
+/** Registers the global keydown listener on mount */
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
 })
 
+/** Removes the global keydown listener on unmount */
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
 })
