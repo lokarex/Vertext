@@ -149,6 +149,7 @@ export default {
                 orderedList: 'Ordered List',
                 blockquote: 'Blockquote',
                 link: 'Link',
+                image: 'Image',
                 hr: 'Horizontal Rule',
             },
             insertLink: 'Insert Link',

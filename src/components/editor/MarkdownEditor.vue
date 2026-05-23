@@ -24,12 +24,14 @@ import {
   TextNumberListLtr24Regular,
   TextQuote24Regular,
   Link24Regular,
+  Image24Regular,
   LineHorizontal320Regular,
 } from '@vicons/fluent'
 import { useEditorStore } from '@/stores/editor'
 import { useI18n } from 'vue-i18n'
 import type { MarkdownMode } from '@/stores/editor'
 import { useEditorCommands } from '@/composables/useEditorCommands'
+import { fileToBase64 } from '@/utils/image'
 import WysiwygEditor from './WysiwygEditor.vue'
 import SplitEditor from './SplitEditor.vue'
 import TextareaEditor from './TextareaEditor.vue'
@@ -91,6 +93,28 @@ const showLinkModal = ref(false)
 const linkTextInput = ref('')
 /** URL target for the link being inserted */
 const linkUrlInput = ref('')
+
+/** Hidden file input element for image insertion */
+const imageInputRef = ref<HTMLInputElement>()
+
+/** Opens the file picker for image insertion */
+function openImagePicker() {
+  imageInputRef.value?.click()
+}
+
+/** Handles image file selection from the hidden input */
+async function onImageFileSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  try {
+    const dataUrl = await fileToBase64(file)
+    commands.insertImage(dataUrl, file.name)
+  } catch (err) {
+    message.error(t('editor.message.saveFailed', { error: String(err) }))
+  }
+  input.value = ''
+}
 
 /** Opens the link insertion modal, pre-filling text with the current editor selection */
 function openLinkModal() {
@@ -169,6 +193,7 @@ const shortcutLabels: Record<string, string> = {
   orderedList: 'Ctrl+Shift+O',
   blockquote: 'Ctrl+Shift+B',
   link: 'Ctrl+K',
+  image: 'Ctrl+Shift+I',
   hr: 'Ctrl+Shift+H',
   save: 'Ctrl+S',
 }
@@ -207,6 +232,7 @@ const shortcutDefs: ShortcutDef[] = [
   { ctrl: true, shift: true, key: 'u', action: () => commands.toggleBulletList(), milkdown: false },
   { ctrl: true, shift: true, key: 'o', action: () => commands.toggleOrderedList(), milkdown: false },
   { ctrl: true, shift: false, key: 'k', action: () => openLinkModal(), milkdown: false },
+  { ctrl: true, shift: true, key: 'i', action: () => openImagePicker(), milkdown: false },
   { ctrl: true, shift: true, key: 'h', action: () => commands.insertHorizontalRule(), milkdown: false },
 ]
 
@@ -350,6 +376,14 @@ onUnmounted(() => {
         </n-tooltip>
         <n-tooltip trigger="hover">
           <template #trigger>
+            <n-button strong secondary round size="small" @click="openImagePicker">
+              <n-icon :component="Image24Regular" :size="18" />
+            </n-button>
+          </template>
+          {{ $t('editor.label.format.image') }} ({{ shortcutLabels.image }})
+        </n-tooltip>
+        <n-tooltip trigger="hover">
+          <template #trigger>
             <n-button strong secondary round size="small" @click="commands.insertHorizontalRule()">
               <n-icon :component="LineHorizontal320Regular" :size="18" />
             </n-button>
@@ -442,6 +476,14 @@ onUnmounted(() => {
         </n-space>
       </template>
     </n-modal>
+
+    <input
+      ref="imageInputRef"
+      type="file"
+      accept="image/*"
+      style="display: none"
+      @change="onImageFileSelected"
+    />
   </div>
 </template>
 

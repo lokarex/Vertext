@@ -8,6 +8,7 @@ import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { NScrollbar } from 'naive-ui'
 import { useEditorStore } from '@/stores/editor'
 import { useEditorScroll } from '@/composables/useEditorScroll'
+import { fileToBase64 } from '@/utils/image'
 
 /**
  * @property {string} tabId - Unique identifier of the editor tab.
@@ -55,6 +56,36 @@ function getTextarea(): HTMLTextAreaElement | null {
  * @method getTextarea - Returns the native textarea element.
  */
 defineExpose({ getTextarea })
+
+/**
+ * Handles paste events on the textarea, converting image files
+ * to base64 data URLs and inserting them as markdown image syntax.
+ */
+async function onPaste(e: ClipboardEvent) {
+  const files = e.clipboardData?.files
+  if (!files || files.length === 0) return
+  const file = files[0]
+  if (!file.type.startsWith('image/')) return
+  if (!textareaEl.value) return
+
+  e.preventDefault()
+  try {
+    const dataUrl = await fileToBase64(file)
+    const start = textareaEl.value.selectionStart
+    const end = textareaEl.value.selectionEnd
+    const md = '![' + file.name + '](' + dataUrl + ')'
+    const before = value.value.slice(0, start)
+    const after = value.value.slice(end)
+    value.value = before + md + after
+    handleInput()
+    await nextTick()
+    textareaEl.value.selectionStart = start + md.length
+    textareaEl.value.selectionEnd = start + md.length
+    textareaEl.value.focus()
+  } catch {
+    // silently ignore - user can paste text normally
+  }
+}
 
 /**
  * Initializes the editor: loads tab content, auto-resizes, and restores scroll position.
@@ -106,6 +137,7 @@ onBeforeUnmount(() => {
       ref="textareaEl"
       v-model="value"
       @input="handleInput"
+      @paste="onPaste"
       class="markdown-textarea"
       spellcheck="false"
     />

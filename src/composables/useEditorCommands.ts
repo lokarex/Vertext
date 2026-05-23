@@ -262,6 +262,45 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     view.dom.focus({ preventScroll: true } as any)
   }
 
+  /**
+   * Inserts an image at the current cursor position.
+   * @param src - The image source URL or base64 data URL.
+   * @param alt - Alternative text for the image.
+   */
+  function insertImage(src: string, alt?: string) {
+    if (isTextareaMode()) {
+      const el = getTextareaElement()
+      if (!el) return
+      const scrollContainer = getScrollContainer(el)
+      const savedScrollTop = scrollContainer?.scrollTop ?? 0
+      const start = el.selectionStart
+      const end = el.selectionEnd
+      const value = el.value
+      const replacement = '![' + (alt || 'image') + '](' + src + ')'
+      const newValue = value.slice(0, start) + replacement + value.slice(end)
+      el.value = newValue
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      nextTick(() => {
+        const pos = start + replacement.length
+        el.selectionStart = pos
+        el.selectionEnd = pos
+        el.focus({ preventScroll: true } as any)
+        autoResize(el)
+        if (scrollContainer) {
+          scrollContainer.scrollTop = savedScrollTop
+        }
+      })
+      return
+    }
+    const view = getEditorView()
+    if (!view) return
+    const { state, dispatch } = view
+    const imageNode = state.schema.nodes.image.create({ src, alt: alt || '', title: '' })
+    const tr = state.tr.replaceSelectionWith(imageNode).scrollIntoView()
+    dispatch(tr)
+    view.dom.focus({ preventScroll: true } as any)
+  }
+
   return {
     toggleBold,
     toggleItalic,
@@ -274,5 +313,6 @@ export function useEditorCommands(ctx: EditorCommandsContext) {
     getSelectedText,
     insertLinkAtSelection,
     insertHorizontalRule,
+    insertImage,
   }
 }

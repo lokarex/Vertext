@@ -10,6 +10,7 @@ import { commonmark } from '@milkdown/kit/preset/commonmark'
 import { gfm } from '@milkdown/kit/preset/gfm'
 import { clipboard } from '@milkdown/kit/plugin/clipboard'
 import { history } from '@milkdown/kit/plugin/history'
+import { upload } from '@milkdown/kit/plugin/upload'
 import { cursor } from '@milkdown/kit/plugin/cursor'
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
 import { nord } from '@milkdown/theme-nord'
@@ -65,7 +66,7 @@ export function useMilkdownEditor() {
       .use(gfm)
 
     if (options.editable) {
-      builder = builder.use(clipboard).use(history).use(cursor).use(listener)
+      builder = builder.use(clipboard).use(history).use(cursor).use(listener).use(upload)
     }
 
     instance.value = builder

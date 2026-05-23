@@ -149,6 +149,7 @@ export default {
                 orderedList: '有序列表',
                 blockquote: '引用',
                 link: '链接',
+                image: '图片',
                 hr: '分割线',
             },
             insertLink: '插入链接',
