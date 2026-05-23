@@ -38,7 +38,10 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => ({
 <template>
   <n-config-provider :theme="themeMap[settingsStore.theme ?? 'lightTheme']" :theme-overrides="themeOverrides">
     <n-global-style />
-    <n-message-provider>
+    <n-message-provider :container-style="{
+      paddingTop: 'env(safe-area-inset-top, 0px)',
+      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+    }">
       <main class="main-container">
         <Header />
         <div v-if="navigationStore.selectedView == 'settingsView'" class="view-content">
