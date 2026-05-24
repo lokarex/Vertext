@@ -15,12 +15,14 @@ import { useI18n } from 'vue-i18n'
 import type { FileEntry } from '@/models/FileEntry'
 import { attachIcons, getFileEntryIcon } from '@/composables/useFileTreeIcons'
 import { findNodeByKey, removeNodeFromTree, getTargetParentDir, addNewEntryToTree, updateChildKeys } from '@/utils/fileTree'
+import { useErrorHandler } from '@/composables/useErrorHandler'
 
 const { t } = useI18n()
 
 const repositoriesStore = useRepositoriesStore()
 const navigationStore = useNavigationStore()
 const editorStore = useEditorStore()
+const { handleError } = useErrorHandler()
 const message = useMessage()
 
 /** Currently selected tree node key (file/directory path) */
@@ -96,7 +98,7 @@ async function confirmRename() {
     }
     message.success(t('fileTree.message.renameSuccess'))
   } catch (err) {
-    message.error(t('fileTree.message.renameFailed', { error: String(err) }))
+    handleError('fileTree.message.renameFailed', err)
   }
 }
 
@@ -136,7 +138,7 @@ async function handleFileEntrySelect(keys: string[]) {
         repositoriesStore.fileTreeOpen = false
         navigationStore.toEditor()
       } catch (err) {
-        message.error(t('editor.message.loadFailed', { error: String(err) }))
+        handleError('editor.message.loadFailed', err)
       }
     }
   } else {
@@ -190,7 +192,7 @@ async function confirmDelete() {
     }
     message.success(t('fileTree.message.deleteSuccess'))
   } catch (err) {
-    message.error(t('fileTree.message.deleteFailed', { error: String(err) }))
+    handleError('fileTree.message.deleteFailed', err)
   }
 }
 
@@ -203,7 +205,7 @@ async function refreshFileTree() {
     selectedFileEntryKey.value = null
     message.success(t('fileTree.message.refreshSuccess'))
   } catch (err) {
-    message.error(t('fileTree.message.refreshFailed', { error: String(err) }))
+    handleError('fileTree.message.refreshFailed', err)
   } finally {
     isRefreshing.value = false
   }
@@ -243,7 +245,7 @@ async function confirmNewFile() {
     }
     message.success(t('fileTree.message.fileCreateSuccess'))
   } catch (err) {
-    message.error(t('fileTree.message.createFailed', { error: String(err) }))
+    handleError('fileTree.message.createFailed', err)
   }
 }
 
@@ -281,7 +283,7 @@ async function confirmNewFolder() {
     }
     message.success(t('fileTree.message.folderCreateSuccess'))
   } catch (err) {
-    message.error(t('fileTree.message.createFailed', { error: String(err) }))
+    handleError('fileTree.message.createFailed', err)
   }
 }
 

@@ -97,6 +97,7 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         }
         catch (err) {
             error(`Failed to init local repository: ${err}`);
+            throw err;
         }
     }
 
@@ -128,6 +129,7 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         }
         catch (err) {
             error(`Failed to clone remote repository: ${err}`);
+            throw err;
         }
     }
 
@@ -179,6 +181,7 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         }
         catch (err) {
             error(`Failed to delete repository: ${err}`);
+            throw err;
         }
     }
 

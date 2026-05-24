@@ -6,7 +6,7 @@
  */
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { Component } from 'vue'
-import { NButton, NButtonGroup, NIcon, NTooltip, NModal, NInput, NSpace, useMessage } from 'naive-ui'
+import { NButton, NButtonGroup, NIcon, NTooltip, NModal, NInput, NSpace } from 'naive-ui'
 import {
   Save24Regular,
   CheckmarkCircle24Regular,
@@ -28,7 +28,6 @@ import {
   LineHorizontal320Regular,
 } from '@vicons/fluent'
 import { useEditorStore } from '@/stores/editor'
-import { useI18n } from 'vue-i18n'
 import type { MarkdownMode } from '@/stores/editor'
 import { useEditorCommands } from '@/composables/useEditorCommands'
 import { fileToBase64 } from '@/utils/image'
@@ -36,15 +35,15 @@ import WysiwygEditor from './WysiwygEditor.vue'
 import SplitEditor from './SplitEditor.vue'
 import TextareaEditor from './TextareaEditor.vue'
 import PreviewEditor from './PreviewEditor.vue'
+import { useErrorHandler } from '@/composables/useErrorHandler'
 
 /** @property tabId - Unique identifier of the editor tab to manage */
 const props = defineProps<{
   tabId: string
 }>()
 
-const { t } = useI18n()
 const editorStore = useEditorStore()
-const message = useMessage()
+const { handleError } = useErrorHandler()
 
 /** Currently active tab data computed from the editor store */
 const tab = computed(() => editorStore.tabs.find((t) => t.id === props.tabId) ?? null)
@@ -111,7 +110,7 @@ async function onImageFileSelected(event: Event) {
     const dataUrl = await fileToBase64(file)
     commands.insertImage(dataUrl, file.name)
   } catch (err) {
-    message.error(t('editor.message.saveFailed', { error: String(err) }))
+    handleError('editor.message.saveFailed', err)
   }
   input.value = ''
 }
@@ -146,7 +145,7 @@ async function handleSave() {
       justSaved.value = false
     }, 2000)
   } catch (err) {
-    message.error(t('editor.message.saveFailed', { error: String(err) }))
+    handleError('editor.message.saveFailed', err)
   }
 }
 

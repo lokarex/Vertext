@@ -11,8 +11,8 @@ import { useRepositoriesStore } from '@/stores/repositories';
 import type { Repository } from '@/models/Repository';
 import type { CommitInfo } from '@/models/CommitInfo';
 import { listen } from '@tauri-apps/api/event';
-import { error } from '@tauri-apps/plugin-log';
 import { invoke } from '@tauri-apps/api/core';
+import { useErrorHandler } from '@/composables/useErrorHandler';
 
 /**
  * Props for the expandable repository card.
@@ -45,6 +45,9 @@ const handleClick = () => {
 };
 
 const { t } = useI18n();
+
+const { handleError } = useErrorHandler();
+const message = useMessage();
 
 /** Whether the expanded actions panel is visible */
 const isExpanded = ref(false);
@@ -83,9 +86,13 @@ const handleToggleExpand = () => {
 };
 
 /** Deletes this repository from the store after confirmation */
-const handleDelete = () => {
+const handleDelete = async () => {
     showDeleteConfirmModal.value = false;
-    repositoriesStore.deleteRepository(props.repository.name);
+    try {
+        await repositoriesStore.deleteRepository(props.repository.name);
+    } catch (err) {
+        handleError('repository.message.deleteFailed', err);
+    }
 };
 
 /**
@@ -97,7 +104,10 @@ const handleSync = async () => {
 
     const repo = props.repository;
     if (!repo.remoteUrl || !repo.userName) {
-        messageRef.error(t('repository.message.syncNotConfigured'));
+        const missing: string[] = [];
+        if (!repo.remoteUrl) missing.push(t('repository.label.remoteUrl'));
+        if (!repo.userName) missing.push(t('repository.label.userName'));
+        handleError('repository.message.syncNotConfigured', new Error(missing.join(', ')));
         return;
     }
 
@@ -109,8 +119,8 @@ const handleSync = async () => {
     let unlisten: (() => void) | null = null;
     try {
         unlisten = await listen<{ step: string; message: string }>('sync-progress', (event) => {
-            const { step, message } = event.payload;
-            syncStep.value = message;
+            const { step, message: payloadMessage } = event.payload;
+            syncStep.value = payloadMessage;
 
             switch (step) {
                 case 'checking':
@@ -138,7 +148,7 @@ const handleSync = async () => {
                     isSyncing.value = false;
                     syncProgress.value = 0;
                     syncStep.value = '';
-                    messageRef.success(t('repository.message.syncSuccess'));
+                    message.success(t('repository.message.syncSuccess'));
                 }, 500);
             }
         });
@@ -146,11 +156,10 @@ const handleSync = async () => {
         await repositoriesStore.syncRepository(repo.name);
     }
     catch (err) {
-        error(`Sync failed: ${err}`);
         syncError.value = String(err);
         isSyncing.value = false;
         syncProgress.value = 0;
-        messageRef.error(t('repository.message.syncFailed'));
+        handleError('repository.message.syncFailed', err);
     }
     finally {
         unlisten?.();
@@ -169,7 +178,7 @@ const handleToggleHistory = async () => {
                 repoName: props.repository.name
             });
         } catch (err) {
-            error(`Failed to load history: ${err}`);
+            handleError('repository.message.historyLoadFailed', err);
         } finally {
             historyLoading.value = false;
         }
@@ -203,15 +212,11 @@ async function handleConfirmRestore() {
         historyCommits.value = [];
         await handleToggleHistory();
         repositoriesStore.setStatus(props.repository.name, 'unsynced');
-        messageRef.success(t('repository.message.restoreSuccess'));
+        message.success(t('repository.message.restoreSuccess'));
     } catch (err) {
-        error(`Restore failed: ${err}`);
-        messageRef.error(t('repository.message.restoreFailed'));
+        handleError('repository.message.restoreFailed', err);
     }
 }
-
-/** Naive UI message instance for user notifications */
-const messageRef = useMessage();
 
 /** Opens the remote configuration modal, pre-filling existing values */
 const handleConfigureRemote = () => {
@@ -225,13 +230,18 @@ const handleConfigureRemote = () => {
 /** Persists the remote configuration (URL, username, password) via the store */
 const handleSaveConfig = async () => {
     configErrorMessage.value = '';
-    await repositoriesStore.configureRepository(
-        props.repository.name,
-        configRemoteUrl.value || null,
-        configUserName.value || null,
-        configPassword.value || null
-    );
-    showConfigModal.value = false;
+    try {
+        await repositoriesStore.configureRepository(
+            props.repository.name,
+            configRemoteUrl.value || null,
+            configUserName.value || null,
+            configPassword.value || null
+        );
+        showConfigModal.value = false;
+    } catch (err) {
+        configErrorMessage.value = String(err);
+        handleError('repository.message.configureFailed', err);
+    }
 };
 
 /** Closes the configuration modal without saving */

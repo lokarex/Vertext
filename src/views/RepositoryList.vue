@@ -10,9 +10,11 @@ import { useI18n } from 'vue-i18n';
 import { Add24Regular } from '@vicons/fluent';
 import { useRepositoriesStore } from '@/stores/repositories';
 import RepositoryCard from '@/components/RepositoryCard.vue';
+import { useErrorHandler } from '@/composables/useErrorHandler';
 
 const { t } = useI18n();
 const repositoriesStore = useRepositoriesStore();
+const { handleError } = useErrorHandler();
 
 /** Whether the create repository modal is visible. */
 const showModal = ref(false);
@@ -59,19 +61,27 @@ function closeModal() {
  * For local repos, initializes with the given name.
  * For remote repos, clones with optional authentication credentials.
  */
-function createRepository() {
+async function createRepository() {
     if (repoType.value === 'local') {
         if (repoName.value.trim()) {
-            repositoriesStore.initLocalRepository(repoName.value.trim());
-            showModal.value = false;
+            try {
+                await repositoriesStore.initLocalRepository(repoName.value.trim());
+                showModal.value = false;
+            } catch (err) {
+                handleError('repository.message.createFailed', err);
+            }
         }
     } else {
         if (remoteUrl.value.trim()) {
             const name = repoName.value.trim() || undefined;
             const user = requiresAuth.value && userName.value.trim() ? userName.value.trim() : undefined;
             const pass = requiresAuth.value && password.value ? password.value : undefined;
-            repositoriesStore.cloneRemoteRepository(remoteUrl.value.trim(), name, user, pass);
-            showModal.value = false;
+            try {
+                await repositoriesStore.cloneRemoteRepository(remoteUrl.value.trim(), name, user, pass);
+                showModal.value = false;
+            } catch (err) {
+                handleError('repository.message.cloneFailed', err);
+            }
         }
     }
 }
