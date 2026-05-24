@@ -236,6 +236,38 @@ export const useRepositoriesStore = defineStore('repositories', () => {
     }
 
     /**
+     * Renames a repository on disk and updates all state references.
+     * Credentials are automatically migrated by the backend.
+     *
+     * @param oldName - The current repository name.
+     * @param newName - The desired new name.
+     * @throws {Error} If the backend rename operation fails.
+     */
+    async function renameRepository(oldName: string, newName: string) {
+        try {
+            await invoke('rename_repository', { oldName, newName });
+
+            const repo = repositories.value.find(r => r.name === oldName);
+            if (repo) {
+                repo.name = newName;
+            }
+
+            if (selectedRepository.value?.name === oldName) {
+                selectedRepository.value = repo ?? null;
+                await store?.set('selectedRepositoryName', newName);
+            }
+
+            await store?.set('repositories', repositories.value);
+            await store?.save();
+            trace(`Repository '${oldName}' renamed to '${newName}' successfully`);
+        }
+        catch (err) {
+            error(`Failed to rename repository: ${err}`);
+            throw err;
+        }
+    }
+
+    /**
      * Selects a repository by name and persists the selection.
      * Pass `null` to deselect.
      *
@@ -263,5 +295,6 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         syncRepository,
         setStatus,
         selectRepository,
+        renameRepository,
     };
 })

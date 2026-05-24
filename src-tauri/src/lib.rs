@@ -64,6 +64,7 @@ pub fn run() {
             command::clone_remote_repository,
             command::sync_repository,
             command::delete_repository,
+            command::rename_repository,
             command::list_commit_history,
             command::restore_commit,
             command::list_repository_tree,

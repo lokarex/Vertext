@@ -10,6 +10,7 @@ export default {
             configure: '配置',
             save: '保存',
             restore: '恢复',
+            rename: '重命名',
         },
         label: {
             name: '仓库名称',
@@ -34,6 +35,9 @@ export default {
             password: '密码',
             passwordPlaceholder: '请输入密码',
             save: '保存',
+            rename: '重命名',
+            renamePlaceholder: '请输入新仓库名称',
+            renameRemoteUrl: '重命名仓库',
         },
         message: {
             deleteConfirm: '确认删除仓库 {name}？',
@@ -55,6 +59,8 @@ export default {
             cloneFailed: '克隆仓库失败: {error}',
             deleteFailed: '删除仓库失败: {error}',
             historyLoadFailed: '加载历史失败: {error}',
+            renameSuccess: '仓库重命名成功',
+            renameFailed: '重命名失败: {error}',
         },
     },
     language: {

@@ -251,6 +251,83 @@ pub fn delete_repository(repo_name: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Renames a repository directory on disk and migrates keychain credentials.
+///
+/// Validates the new name, checks for duplicates, renames the directory
+/// at `<app_data>/repos/<old_name>` to `<app_data>/repos/<new_name>`,
+/// and migrates any stored keychain credentials from the old name to
+/// the new name.
+///
+/// # Errors
+///
+/// Returns an error if validation fails, a duplicate repository exists,
+/// the directory cannot be renamed, or credential migration fails.
+#[tauri::command]
+pub fn rename_repository(old_name: String, new_name: String) -> Result<(), String> {
+    trace!("Renaming repository '{}' to '{}'", old_name, new_name);
+
+    let trimmed = new_name.trim();
+    if trimmed.is_empty() {
+        error!("New repository name is empty");
+        return Err("Name cannot be empty".to_string());
+    }
+    if trimmed.len() > 64 {
+        error!("New repository name too long: {} characters", trimmed.len());
+        return Err("Name too long (max 64 characters)".to_string());
+    }
+    if trimmed.contains(|c: char| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')) {
+        error!("New repository name contains invalid characters: {}", trimmed);
+        return Err("Name contains invalid characters".to_string());
+    }
+
+    let old_path = repos_dir().join(&old_name);
+    let new_path = repos_dir().join(trimmed);
+
+    if new_path.exists() {
+        error!("A repository with the name '{}' already exists", trimmed);
+        return Err(format!("A repository named '{}' already exists", trimmed));
+    }
+
+    if !old_path.exists() {
+        error!("Repository '{}' does not exist at {:?}", old_name, old_path);
+        return Err(format!("Repository '{}' does not exist", old_name));
+    }
+
+    std::fs::rename(&old_path, &new_path).map_err(|e| {
+        error!("Failed to rename directory {:?} to {:?}: {}", old_path, new_path, e);
+        e.to_string()
+    })?;
+    trace!("Renamed directory {:?} to {:?}", old_path, new_path);
+
+    let entry = Entry::new("vertext", &old_name).map_err(|e: keyring_core::Error| e.to_string())?;
+    match entry.get_password() {
+        Ok(password) => {
+            let new_entry = Entry::new("vertext", trimmed).map_err(|e: keyring_core::Error| e.to_string())?;
+            new_entry.set_password(&password).map_err(|e: keyring_core::Error| {
+                error!("Failed to set password for new name '{}': {}", trimmed, e);
+                std::fs::rename(&new_path, &old_path).ok();
+                e.to_string()
+            })?;
+            entry.delete_credential().map_err(|e: keyring_core::Error| {
+                error!("Failed to delete old keychain entry for '{}': {}", old_name, e);
+                e.to_string()
+            })?;
+            trace!("Migrated keychain credentials from '{}' to '{}'", old_name, trimmed);
+        }
+        Err(keyring_core::Error::NoEntry) => {
+            trace!("No keychain credentials found for '{}', skipping migration", old_name);
+        }
+        Err(e) => {
+            error!("Failed to access keychain for '{}': {}", old_name, e);
+            std::fs::rename(&new_path, &old_path).ok();
+            return Err(format!("Failed to access keychain: {}", e));
+        }
+    }
+
+    trace!("Repository '{}' renamed to '{}' successfully", old_name, trimmed);
+    Ok(())
+}
+
 /// Lists the commit history of a repository.
 ///
 /// Returns all commits reachable from any branch or remote tracking

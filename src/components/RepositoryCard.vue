@@ -6,7 +6,7 @@
 import { computed, ref } from 'vue';
 import { NCard, NIcon, NButton, NModal, NInput, NSpace, NAlert, NProgress, NTimeline, NTimelineItem, NTag, NScrollbar, NTooltip, useMessage } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
-import { Folder24Regular, ChevronRight16Regular, ArrowSync20Regular, Settings20Regular, Delete20Regular, History20Regular, ArrowUndo20Regular } from '@vicons/fluent';
+import { Folder24Regular, ChevronRight16Regular, ArrowSync20Regular, Settings20Regular, Delete20Regular, History20Regular, ArrowUndo20Regular, Rename20Regular } from '@vicons/fluent';
 import { useRepositoriesStore } from '@/stores/repositories';
 import type { Repository } from '@/models/Repository';
 import type { CommitInfo } from '@/models/CommitInfo';
@@ -71,6 +71,12 @@ const syncProgress = ref(0);
 const syncStep = ref('');
 /** Error message from the last failed sync operation */
 const syncError = ref('');
+/** Controls visibility of the rename modal */
+const showRenameModal = ref(false);
+/** New name input value for rename */
+const renameValue = ref('');
+/** Error message to display in the rename modal */
+const renameErrorMessage = ref('');
 /** Whether the commit history panel is visible */
 const showHistory = ref(false);
 /** Loaded commit history entries for this repository */
@@ -249,6 +255,45 @@ const handleCancelConfig = () => {
     showConfigModal.value = false;
 };
 
+/** Opens the rename modal pre-filled with the current repository name */
+const handleRename = () => {
+    renameValue.value = props.repository.name;
+    renameErrorMessage.value = '';
+    showRenameModal.value = true;
+};
+
+/** Validates and executes the rename operation */
+const handleSaveRename = async () => {
+    renameErrorMessage.value = '';
+    const trimmed = renameValue.value.trim();
+
+    if (!trimmed) {
+        renameErrorMessage.value = t('repository.message.renameFailed', { error: t('fileTree.message.nameEmpty') });
+        return;
+    }
+    if (trimmed.length > 64) {
+        renameErrorMessage.value = t('repository.message.renameFailed', { error: 'Name too long (max 64 characters)' });
+        return;
+    }
+    if (/[\/\\:*?"<>|]/.test(trimmed)) {
+        renameErrorMessage.value = t('repository.message.renameFailed', { error: 'Name contains invalid characters' });
+        return;
+    }
+    if (trimmed === props.repository.name) {
+        showRenameModal.value = false;
+        return;
+    }
+
+    try {
+        await repositoriesStore.renameRepository(props.repository.name, trimmed);
+        showRenameModal.value = false;
+        message.success(t('repository.message.renameSuccess'));
+    } catch (err) {
+        renameErrorMessage.value = String(err);
+        handleError('repository.message.renameFailed', err);
+    }
+};
+
 /** Human-readable status label derived from the repository's current status */
 const statusText = computed(() => {
     switch (props.repository.status) {
@@ -293,6 +338,10 @@ const statusColor = computed(() => {
                     <div class="action-item" @click.stop="handleConfigureRemote">
                         <NIcon :component="Settings20Regular" :size="16" />
                         <span>{{ t('repository.label.configureRemote') }}</span>
+                    </div>
+                    <div class="action-item" :class="{ 'action-item-disabled': isSyncing }" @click.stop="handleRename">
+                        <NIcon :component="Rename20Regular" :size="16" />
+                        <span>{{ t('repository.label.rename') }}</span>
                     </div>
                     <div class="action-item" :class="{ 'action-item-disabled': isSyncing }" @click.stop="handleSync">
                         <NIcon :component="ArrowSync20Regular" :size="16" :class="{ 'icon-spin': isSyncing }" />
@@ -368,6 +417,24 @@ const statusColor = computed(() => {
                 <NSpace justify="end">
                     <NButton @click="handleCancelConfig">{{ t('repository.action.cancel') }}</NButton>
                     <NButton type="primary" @click="handleSaveConfig">{{ t('repository.action.save') }}</NButton>
+                </NSpace>
+            </template>
+        </NModal>
+
+        <NModal v-model:show="showRenameModal" preset="card" :title="t('repository.label.renameRemoteUrl')" :mask-closable="false">
+            <div class="config-content">
+                <div class="config-item">
+                    <span class="config-label">{{ t('repository.label.rename') }}</span>
+                    <NInput v-model:value="renameValue" :placeholder="t('repository.label.renamePlaceholder')" @keyup.enter="handleSaveRename" />
+                </div>
+                <NAlert v-if="renameErrorMessage" type="error" style="margin-top: 12px;">
+                    {{ renameErrorMessage }}
+                </NAlert>
+            </div>
+            <template #footer>
+                <NSpace justify="end">
+                    <NButton @click="showRenameModal = false">{{ t('repository.action.cancel') }}</NButton>
+                    <NButton type="primary" @click="handleSaveRename">{{ t('repository.action.save') }}</NButton>
                 </NSpace>
             </template>
         </NModal>

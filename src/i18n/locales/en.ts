@@ -10,6 +10,7 @@ export default {
             configure: 'Configure',
             save: 'Save',
             restore: 'Restore',
+            rename: 'Rename',
         },
         label: {
             name: 'Repository Name',
@@ -34,6 +35,9 @@ export default {
             password: 'Password',
             passwordPlaceholder: 'Enter password',
             save: 'Save',
+            rename: 'Rename',
+            renamePlaceholder: 'Enter new repository name',
+            renameRemoteUrl: 'Rename Repository',
         },
         message: {
             deleteConfirm: 'Confirm to delete repository {name}?',
@@ -55,6 +59,8 @@ export default {
             cloneFailed: 'Failed to clone repository: {error}',
             deleteFailed: 'Failed to delete repository: {error}',
             historyLoadFailed: 'Failed to load history: {error}',
+            renameSuccess: 'Repository renamed successfully',
+            renameFailed: 'Rename failed: {error}',
         },
     },
     language: {
