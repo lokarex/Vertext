@@ -75,6 +75,15 @@ function isMarkdownFile(fileName: string): boolean {
 }
 
 /**
+ * Extracts the display file name from a repository-relative path.
+ * @param filePath - The repository-relative file path.
+ * @returns The last path segment, or the original path if no segment exists.
+ */
+function getFileNameFromPath(filePath: string): string {
+  return filePath.split('/').pop() ?? filePath
+}
+
+/**
  * Pinia store for editor state.
  * Handles tab management, file I/O, auto-save, and session persistence.
  */
@@ -197,6 +206,33 @@ export const useEditorStore = defineStore('editor', () => {
     const tab = tabs.value.find((t) => t.id === tabId)
     if (tab) {
       tab.content = content
+    }
+  }
+
+  /**
+   * Updates open tab metadata after a file or directory is renamed.
+   * @param oldPath - The previous repository-relative file or directory path.
+   * @param newPath - The new repository-relative file or directory path.
+   */
+  function updateTabsAfterRename(oldPath: string, newPath: string): void {
+    const oldPrefix = `${oldPath}/`
+    const newPrefix = `${newPath}/`
+
+    for (const tab of tabs.value) {
+      let updatedPath: string | null = null
+
+      if (tab.filePath === oldPath) {
+        updatedPath = newPath
+      } else if (tab.filePath.startsWith(oldPrefix)) {
+        updatedPath = `${newPrefix}${tab.filePath.slice(oldPrefix.length)}`
+      }
+
+      if (!updatedPath) continue
+
+      const fileName = getFileNameFromPath(updatedPath)
+      tab.filePath = updatedPath
+      tab.fileName = fileName
+      tab.isMarkdown = isMarkdownFile(fileName)
     }
   }
 
@@ -391,6 +427,7 @@ export const useEditorStore = defineStore('editor', () => {
     closeTab,
     setActiveTab,
     updateContent,
+    updateTabsAfterRename,
     saveFile,
     setMarkdownMode,
     clearAllTabs,

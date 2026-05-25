@@ -86,10 +86,13 @@ async function confirmRename() {
     parts.pop()
     parts.push(name)
     const newKey = parts.join('/')
+    editorStore.updateTabsAfterRename(oldKey, newKey)
     if (!node.isLeaf) {
       updateChildKeys(node, oldKey, newKey)
     }
     node.label = name
+    const newIcon = getFileEntryIcon(node)
+    node.prefix = newIcon ? () => h(NIcon, { component: newIcon, size: 18 }) : undefined
     node.key = newKey
     selectedFileEntryKey.value = newKey
     showRenameModal.value = false
