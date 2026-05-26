@@ -237,6 +237,35 @@ export const useEditorStore = defineStore('editor', () => {
   }
 
   /**
+   * Closes open tabs whose files were deleted directly or inside a deleted directory.
+   * @param deletedPath - The repository-relative file or directory path that was deleted.
+   */
+  function closeTabsAfterDelete(deletedPath: string): void {
+    const deletedPrefix = `${deletedPath}/`
+    const shouldClose = (tab: Tab) => (
+      tab.filePath === deletedPath || tab.filePath.startsWith(deletedPrefix)
+    )
+    const firstClosedIndex = tabs.value.findIndex(shouldClose)
+
+    if (firstClosedIndex === -1) return
+
+    const previousActiveTabId = activeTabId.value
+    tabs.value = tabs.value.filter((tab) => !shouldClose(tab))
+
+    if (!previousActiveTabId || tabs.value.some((tab) => tab.id === previousActiveTabId)) {
+      return
+    }
+
+    if (tabs.value.length === 0) {
+      activeTabId.value = null
+      return
+    }
+
+    const nextActiveIndex = Math.min(firstClosedIndex, tabs.value.length - 1)
+    activeTabId.value = tabs.value[nextActiveIndex].id
+  }
+
+  /**
    * Saves a tab's content to disk via the Tauri backend.
    * Marks the tab as clean and updates the repository's sync status.
    *
@@ -428,6 +457,7 @@ export const useEditorStore = defineStore('editor', () => {
     setActiveTab,
     updateContent,
     updateTabsAfterRename,
+    closeTabsAfterDelete,
     saveFile,
     setMarkdownMode,
     clearAllTabs,

@@ -186,8 +186,10 @@ async function confirmDelete() {
   }
   try {
     const repoName = repositoriesStore.selectedRepository!.name
-    await invoke('delete_entry', { repoName, entryKey: selectedFileEntryKey.value })
-    removeNodeFromTree(fileTree.value, selectedFileEntryKey.value!)
+    const deletedKey = selectedFileEntryKey.value!
+    await invoke('delete_entry', { repoName, entryKey: deletedKey })
+    editorStore.closeTabsAfterDelete(deletedKey)
+    removeNodeFromTree(fileTree.value, deletedKey)
     selectedFileEntryKey.value = null
     showDeleteModal.value = false
     if (repositoriesStore.selectedRepository && repositoriesStore.selectedRepository.status === 'synced') {
