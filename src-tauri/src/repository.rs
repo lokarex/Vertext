@@ -107,7 +107,9 @@ impl Repository {
         match self.inner.find_branch(branch_name, git2::BranchType::Local) {
             Ok(_) => {
                 trace!("Branch already exists, switching to it");
-                self.inner.set_head(&branch_ref).map_err(|e| e.to_string())?;
+                self.inner
+                    .set_head(&branch_ref)
+                    .map_err(|e| e.to_string())?;
             }
             Err(_) => {
                 trace!("Branch does not exist, creating it");
@@ -118,16 +120,25 @@ impl Repository {
                             self.inner
                                 .branch(branch_name, &commit, false)
                                 .map_err(|e| e.to_string())?;
-                            self.inner.set_head(&branch_ref).map_err(|e| e.to_string())?;
+                            self.inner
+                                .set_head(&branch_ref)
+                                .map_err(|e| e.to_string())?;
                             trace!("Created branch '{}' from commit {}", branch_name, oid);
                         } else {
                             trace!("Setting unborn HEAD to branch '{}'", branch_name);
-                            self.inner.set_head(&branch_ref).map_err(|e| e.to_string())?;
+                            self.inner
+                                .set_head(&branch_ref)
+                                .map_err(|e| e.to_string())?;
                         }
                     }
                     Err(_) => {
-                        trace!("No HEAD yet, setting unborn HEAD to branch '{}'", branch_name);
-                        self.inner.set_head(&branch_ref).map_err(|e| e.to_string())?;
+                        trace!(
+                            "No HEAD yet, setting unborn HEAD to branch '{}'",
+                            branch_name
+                        );
+                        self.inner
+                            .set_head(&branch_ref)
+                            .map_err(|e| e.to_string())?;
                     }
                 }
             }
@@ -158,7 +169,10 @@ impl Repository {
         let mut options = git2::StatusOptions::new();
         options.include_untracked(true);
         options.include_ignored(false);
-        let statuses = self.inner.statuses(Some(&mut options)).map_err(|e| e.to_string())?;
+        let statuses = self
+            .inner
+            .statuses(Some(&mut options))
+            .map_err(|e| e.to_string())?;
         Ok(!statuses.is_empty())
     }
 
@@ -189,9 +203,19 @@ impl Repository {
         match self.inner.head() {
             Ok(head_ref) => match head_ref.target() {
                 Some(parent_oid) => {
-                    let parent = self.inner.find_commit(parent_oid).map_err(|e| e.to_string())?;
+                    let parent = self
+                        .inner
+                        .find_commit(parent_oid)
+                        .map_err(|e| e.to_string())?;
                     self.inner
-                        .commit(Some("HEAD"), &sig, &sig, "Auto-sync commit", &tree, &[&parent])
+                        .commit(
+                            Some("HEAD"),
+                            &sig,
+                            &sig,
+                            "Auto-sync commit",
+                            &tree,
+                            &[&parent],
+                        )
                         .map_err(|e| e.to_string())?;
                 }
                 None => {
@@ -247,7 +271,11 @@ impl Repository {
         let mut callbacks = git2::RemoteCallbacks::new();
         callbacks.credentials(move |_url, _username, _allowed| {
             git2::Cred::userpass_plaintext(&user, &pass).map_err(|e| {
-                git2::Error::new(git2::ErrorCode::Auth, git2::ErrorClass::Callback, &e.to_string())
+                git2::Error::new(
+                    git2::ErrorCode::Auth,
+                    git2::ErrorClass::Callback,
+                    &e.to_string(),
+                )
             })
         });
         callbacks.certificate_check(|_, _| Ok(git2::CertificateCheckStatus::CertificateOk));
@@ -333,7 +361,10 @@ impl Repository {
     pub fn merge_theirs(&self, their_oid: git2::Oid) -> Result<(), String> {
         trace!("Merging commit {} with theirs strategy...", their_oid);
 
-        let their_commit = self.inner.find_commit(their_oid).map_err(|e| e.to_string())?;
+        let their_commit = self
+            .inner
+            .find_commit(their_oid)
+            .map_err(|e| e.to_string())?;
         let their_annotated = self
             .inner
             .find_annotated_commit(their_oid)
@@ -363,9 +394,7 @@ impl Repository {
                 )
                 .map_err(|e| e.to_string())?;
             self.inner
-                .checkout_head(Some(
-                    git2::build::CheckoutBuilder::default().force(),
-                ))
+                .checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
                 .map_err(|e| e.to_string())?;
             trace!("Fast-forward completed");
             return Ok(());
@@ -396,7 +425,10 @@ impl Repository {
                 )
                 .map_err(|e| e.to_string())?;
 
-            let merge_commit = self.inner.find_commit(merge_oid).map_err(|e| e.to_string())?;
+            let merge_commit = self
+                .inner
+                .find_commit(merge_oid)
+                .map_err(|e| e.to_string())?;
             let merge_tree = merge_commit.tree().map_err(|e| e.to_string())?;
             self.inner
                 .checkout_tree(
@@ -455,7 +487,11 @@ impl Repository {
         let mut callbacks = git2::RemoteCallbacks::new();
         callbacks.credentials(move |_url, _username, _allowed| {
             git2::Cred::userpass_plaintext(&user, &pass).map_err(|e| {
-                git2::Error::new(git2::ErrorCode::Auth, git2::ErrorClass::Callback, &e.to_string())
+                git2::Error::new(
+                    git2::ErrorCode::Auth,
+                    git2::ErrorClass::Callback,
+                    &e.to_string(),
+                )
             })
         });
         callbacks.certificate_check(|_, _| Ok(git2::CertificateCheckStatus::CertificateOk));
@@ -547,8 +583,12 @@ impl Repository {
     /// iteration fails.
     pub fn history(&self) -> Result<Vec<CommitInfo>, String> {
         let mut revwalk = self.inner.revwalk().map_err(|e| e.to_string())?;
-        revwalk.push_glob("refs/heads/*").map_err(|e| e.to_string())?;
-        revwalk.push_glob("refs/remotes/*").map_err(|e| e.to_string())?;
+        revwalk
+            .push_glob("refs/heads/*")
+            .map_err(|e| e.to_string())?;
+        revwalk
+            .push_glob("refs/remotes/*")
+            .map_err(|e| e.to_string())?;
 
         let mut oid_branches = std::collections::HashMap::new();
         let mut oid_tags = std::collections::HashMap::new();
@@ -573,11 +613,7 @@ impl Repository {
             }
         }
 
-        let head_oid = self
-            .inner
-            .head()
-            .ok()
-            .and_then(|h| h.target());
+        let head_oid = self.inner.head().ok().and_then(|h| h.target());
 
         let mut commits: Vec<CommitInfo> = Vec::new();
         for oid_result in revwalk {
@@ -616,12 +652,13 @@ impl Repository {
     /// Returns an error if the target commit cannot be found, the
     /// tree cannot be read, or the restore commit and checkout fail.
     pub fn restore_to(&self, target_oid: git2::Oid) -> Result<(), String> {
-        let target_commit = self.inner.find_commit(target_oid).map_err(|e| e.to_string())?;
+        let target_commit = self
+            .inner
+            .find_commit(target_oid)
+            .map_err(|e| e.to_string())?;
         let target_tree = target_commit.tree().map_err(|e| e.to_string())?;
         let our_head = self.inner.head().map_err(|e| e.to_string())?;
-        let our_commit = our_head
-            .peel_to_commit()
-            .map_err(|e| e.to_string())?;
+        let our_commit = our_head.peel_to_commit().map_err(|e| e.to_string())?;
 
         let sig = self.inner.signature().map_err(|e| e.to_string())?;
 
@@ -638,7 +675,10 @@ impl Repository {
             )
             .map_err(|e| e.to_string())?;
 
-        let restore_commit = self.inner.find_commit(restore_oid).map_err(|e| e.to_string())?;
+        let restore_commit = self
+            .inner
+            .find_commit(restore_oid)
+            .map_err(|e| e.to_string())?;
         let restore_tree = restore_commit.tree().map_err(|e| e.to_string())?;
         self.inner
             .checkout_tree(
@@ -661,14 +701,22 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let repo = git2::Repository::init(dir.path()).unwrap();
         {
+            let mut config = repo.config().unwrap();
+            config.set_str("user.name", "test").unwrap();
+            config.set_str("user.email", "test@test.com").unwrap();
+        }
+        {
             fs::write(dir.path().join("readme.md"), "# Test\n").unwrap();
             let mut index = repo.index().unwrap();
-            index.add_all(["*"], git2::IndexAddOption::DEFAULT, None).unwrap();
+            index
+                .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
+                .unwrap();
             index.write().unwrap();
             let tree_oid = index.write_tree().unwrap();
             let tree = repo.find_tree(tree_oid).unwrap();
             let sig = git2::Signature::now("test", "test@test.com").unwrap();
-            repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[]).unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
+                .unwrap();
         }
         let repository = Repository::open(dir.path()).unwrap();
         (dir, repository)
@@ -694,8 +742,12 @@ mod tests {
             "https://example.com/repo.git",
             "user",
             "pass",
-        ).unwrap();
-        assert_eq!(repo.remote_url, Some("https://example.com/repo.git".to_string()));
+        )
+        .unwrap();
+        assert_eq!(
+            repo.remote_url,
+            Some("https://example.com/repo.git".to_string())
+        );
         assert_eq!(repo.user_name, Some("user".to_string()));
         assert_eq!(repo.password, Some("pass".to_string()));
     }
@@ -704,7 +756,10 @@ mod tests {
     fn ensure_branch_creates_branch() {
         let (_dir, repo) = init_test_repo();
         repo.ensure_branch("my-device").unwrap();
-        let branch = repo.inner.find_branch("my-device", git2::BranchType::Local).unwrap();
+        let branch = repo
+            .inner
+            .find_branch("my-device", git2::BranchType::Local)
+            .unwrap();
         assert!(branch.is_head());
     }
 
@@ -714,7 +769,10 @@ mod tests {
         repo.ensure_branch("my-device").unwrap();
         let config = repo.inner.config().unwrap();
         assert_eq!(config.get_string("user.name").unwrap(), "my-device");
-        assert_eq!(config.get_string("user.email").unwrap(), "my-device@vertext");
+        assert_eq!(
+            config.get_string("user.email").unwrap(),
+            "my-device@vertext"
+        );
     }
 
     #[test]
@@ -801,7 +859,8 @@ mod tests {
             "https://example.com/repo.git",
             "user",
             "pass",
-        ).unwrap();
+        )
+        .unwrap();
         repo.setup_remote().unwrap();
         let remote = repo.inner.find_remote("origin").unwrap();
         assert!(remote.url().unwrap().contains("example.com"));
