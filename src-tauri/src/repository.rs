@@ -650,3 +650,169 @@ impl Repository {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn init_test_repo() -> (TempDir, Repository) {
+        let dir = TempDir::new().unwrap();
+        let repo = git2::Repository::init(dir.path()).unwrap();
+        {
+            fs::write(dir.path().join("readme.md"), "# Test\n").unwrap();
+            let mut index = repo.index().unwrap();
+            index.add_all(["*"], git2::IndexAddOption::DEFAULT, None).unwrap();
+            index.write().unwrap();
+            let tree_oid = index.write_tree().unwrap();
+            let tree = repo.find_tree(tree_oid).unwrap();
+            let sig = git2::Signature::now("test", "test@test.com").unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[]).unwrap();
+        }
+        let repository = Repository::open(dir.path()).unwrap();
+        (dir, repository)
+    }
+
+    #[test]
+    fn open_valid_repo() {
+        let (_dir, _repo) = init_test_repo();
+    }
+
+    #[test]
+    fn open_nonexistent_returns_err() {
+        let dir = TempDir::new().unwrap();
+        let result = Repository::open(&dir.path().join("nonexistent"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn open_with_remote_stores_credentials() {
+        let (_dir, _repo) = init_test_repo();
+        let repo = Repository::open_with_remote(
+            _dir.path(),
+            "https://example.com/repo.git",
+            "user",
+            "pass",
+        ).unwrap();
+        assert_eq!(repo.remote_url, Some("https://example.com/repo.git".to_string()));
+        assert_eq!(repo.user_name, Some("user".to_string()));
+        assert_eq!(repo.password, Some("pass".to_string()));
+    }
+
+    #[test]
+    fn ensure_branch_creates_branch() {
+        let (_dir, repo) = init_test_repo();
+        repo.ensure_branch("my-device").unwrap();
+        let branch = repo.inner.find_branch("my-device", git2::BranchType::Local).unwrap();
+        assert!(branch.is_head());
+    }
+
+    #[test]
+    fn ensure_branch_sets_user_config() {
+        let (_dir, repo) = init_test_repo();
+        repo.ensure_branch("my-device").unwrap();
+        let config = repo.inner.config().unwrap();
+        assert_eq!(config.get_string("user.name").unwrap(), "my-device");
+        assert_eq!(config.get_string("user.email").unwrap(), "my-device@vertext");
+    }
+
+    #[test]
+    fn has_uncommitted_changes_detects_new_file() {
+        let (dir, repo) = init_test_repo();
+        fs::write(dir.path().join("new.md"), "new").unwrap();
+        assert!(repo.has_uncommitted_changes().unwrap());
+    }
+
+    #[test]
+    fn no_uncommitted_changes_on_fresh_repo() {
+        let (_dir, repo) = init_test_repo();
+        assert!(!repo.has_uncommitted_changes().unwrap());
+    }
+
+    #[test]
+    fn commit_all_creates_commit() {
+        let (dir, repo) = init_test_repo();
+        fs::write(dir.path().join("new.md"), "new").unwrap();
+        let initial_head = repo.head_oid().unwrap();
+        repo.commit_all().unwrap();
+        let new_head = repo.head_oid().unwrap();
+        assert_ne!(new_head, initial_head);
+    }
+
+    #[test]
+    fn latest_commit_returns_commit() {
+        let (_dir, repo) = init_test_repo();
+        let (oid, ref_name) = repo.latest_commit().unwrap();
+        assert!(!oid.is_zero());
+        assert!(!ref_name.is_empty());
+    }
+
+    #[test]
+    fn head_oid_returns_oid() {
+        let (_dir, repo) = init_test_repo();
+        let oid = repo.head_oid().unwrap();
+        assert!(!oid.is_zero());
+    }
+
+    #[test]
+    fn history_returns_commits() {
+        let (_dir, repo) = init_test_repo();
+        let commits = repo.history().unwrap();
+        assert!(!commits.is_empty());
+        assert_eq!(commits[0].message, "initial");
+        assert_eq!(commits[0].author, "test");
+    }
+
+    #[test]
+    fn history_marks_head() {
+        let (_dir, repo) = init_test_repo();
+        let commits = repo.history().unwrap();
+        assert!(commits.iter().any(|c| c.is_head));
+    }
+
+    #[test]
+    fn merge_theirs_up_to_date() {
+        let (_dir, repo) = init_test_repo();
+        let head_oid = repo.head_oid().unwrap();
+        let result = repo.merge_theirs(head_oid);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn restore_to_creates_restore_commit() {
+        let (dir, repo) = init_test_repo();
+        fs::write(dir.path().join("second.md"), "second").unwrap();
+        repo.commit_all().unwrap();
+        let commits = repo.history().unwrap();
+        let first_oid_str = &commits.last().unwrap().full_oid;
+        let first_oid = git2::Oid::from_str(first_oid_str).unwrap();
+        repo.restore_to(first_oid).unwrap();
+        let new_commits = repo.history().unwrap();
+        assert!(new_commits.len() > commits.len());
+        assert!(new_commits[0].message.starts_with("Restore to"));
+    }
+
+    #[test]
+    fn setup_remote_creates_origin() {
+        let (dir, _repo) = init_test_repo();
+        let repo = Repository::open_with_remote(
+            dir.path(),
+            "https://example.com/repo.git",
+            "user",
+            "pass",
+        ).unwrap();
+        repo.setup_remote().unwrap();
+        let remote = repo.inner.find_remote("origin").unwrap();
+        assert!(remote.url().unwrap().contains("example.com"));
+    }
+
+    #[test]
+    fn history_has_branch_annotations() {
+        let (_dir, repo) = init_test_repo();
+        repo.ensure_branch("my-device").unwrap();
+        let commits = repo.history().unwrap();
+        let head_commit = commits.iter().find(|c| c.is_head).unwrap();
+        assert!(head_commit.branches.iter().any(|b| b == "my-device"));
+    }
+}

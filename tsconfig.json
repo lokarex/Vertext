@@ -33,7 +33,9 @@
     "src/**/*.ts",
     "src/**/*.d.ts",
     "src/**/*.tsx",
-    "src/**/*.vue"
+    "src/**/*.vue",
+    "src/**/*.test.ts",
+    "vitest.config.ts"
   ],
   "references": [
     {

@@ -78,3 +78,88 @@ pub fn read_dir_recursive(dir: &std::path::Path, base: &std::path::Path) -> Vec<
 
     entries
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn empty_dir_returns_empty_vec() {
+        let dir = TempDir::new().unwrap();
+        let entries = read_dir_recursive(dir.path(), dir.path());
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn single_file_returns_one_leaf_entry() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("readme.md"), "hello").unwrap();
+        let entries = read_dir_recursive(dir.path(), dir.path());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].label, "readme.md");
+        assert!(entries[0].is_leaf);
+    }
+
+    #[test]
+    fn single_directory_returns_one_non_leaf_entry() {
+        let dir = TempDir::new().unwrap();
+        fs::create_dir(dir.path().join("src")).unwrap();
+        let entries = read_dir_recursive(dir.path(), dir.path());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].label, "src");
+        assert!(!entries[0].is_leaf);
+    }
+
+    #[test]
+    fn directories_before_files() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("z_file.txt"), "").unwrap();
+        fs::create_dir(dir.path().join("a_dir")).unwrap();
+        let entries = read_dir_recursive(dir.path(), dir.path());
+        assert!(!entries[0].is_leaf);
+        assert!(entries[1].is_leaf);
+    }
+
+    #[test]
+    fn alphabetical_sorting_within_groups() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("z.txt"), "").unwrap();
+        fs::write(dir.path().join("a.txt"), "").unwrap();
+        let entries = read_dir_recursive(dir.path(), dir.path());
+        assert_eq!(entries[0].label, "a.txt");
+        assert_eq!(entries[1].label, "z.txt");
+    }
+
+    #[test]
+    fn nested_directories_recursed() {
+        let dir = TempDir::new().unwrap();
+        fs::create_dir_all(dir.path().join("a/b")).unwrap();
+        fs::write(dir.path().join("a/b/c.md"), "").unwrap();
+        let entries = read_dir_recursive(dir.path(), dir.path());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].label, "a");
+        assert_eq!(entries[0].children.len(), 1);
+        assert_eq!(entries[0].children[0].label, "b");
+        assert_eq!(entries[0].children[0].children.len(), 1);
+        assert_eq!(entries[0].children[0].children[0].label, "c.md");
+    }
+
+    #[test]
+    fn key_uses_forward_slash() {
+        let dir = TempDir::new().unwrap();
+        fs::create_dir_all(dir.path().join("sub")).unwrap();
+        fs::write(dir.path().join("sub/file.txt"), "").unwrap();
+        let entries = read_dir_recursive(dir.path(), dir.path());
+        assert!(entries[0].children[0].key.contains('/'));
+    }
+
+    #[test]
+    fn nonexistent_path_returns_empty() {
+        let dir = TempDir::new().unwrap();
+        let nonexistent = dir.path().join("nonexistent");
+        let entries = read_dir_recursive(&nonexistent, &nonexistent);
+        assert!(entries.is_empty());
+    }
+}

@@ -69,7 +69,7 @@ function generateTabId(): string {
  * @param fileName - The file name to check.
  * @returns `true` if the file has a markdown extension.
  */
-function isMarkdownFile(fileName: string): boolean {
+export function isMarkdownFile(fileName: string): boolean {
   const lower = fileName.toLowerCase()
   return lower.endsWith('.md') || lower.endsWith('.mdx') || lower.endsWith('.markdown')
 }
@@ -79,7 +79,7 @@ function isMarkdownFile(fileName: string): boolean {
  * @param filePath - The repository-relative file path.
  * @returns The last path segment, or the original path if no segment exists.
  */
-function getFileNameFromPath(filePath: string): string {
+export function getFileNameFromPath(filePath: string): string {
   return filePath.split('/').pop() ?? filePath
 }
 

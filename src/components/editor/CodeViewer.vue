@@ -8,6 +8,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { NCode, NScrollbar } from 'naive-ui'
 import { useEditorStore } from '@/stores/editor'
+import { getLanguageFromFileName } from '@/utils/languageMap'
 
 /** @property tabId - Unique identifier of the editor tab whose content to display. */
 const props = defineProps<{
@@ -100,62 +101,6 @@ onBeforeUnmount(() => {
     scrollHandler = null
   }
 })
-
-/**
- * Maps a file name extension to a language identifier string used by
- * the `<n-code>` syntax highlighter.
- * @param fileName - The file name whose extension determines the language.
- * @returns A language identifier string (e.g. `'typescript'`, `'python'`),
- *          defaulting to `'text'`.
- */
-function getLanguageFromFileName(fileName: string): string {
-  const ext = fileName.split('.').pop()?.toLowerCase() ?? ''
-  const map: Record<string, string> = {
-    ts: 'typescript',
-    tsx: 'typescript',
-    js: 'javascript',
-    jsx: 'javascript',
-    vue: 'html',
-    rs: 'rust',
-    py: 'python',
-    css: 'css',
-    scss: 'scss',
-    less: 'less',
-    html: 'html',
-    htm: 'html',
-    json: 'json',
-    xml: 'xml',
-    yaml: 'yaml',
-    yml: 'yaml',
-    toml: 'toml',
-    md: 'markdown',
-    mdx: 'markdown',
-    sql: 'sql',
-    sh: 'bash',
-    bat: 'bash',
-    ps1: 'powershell',
-    c: 'c',
-    cpp: 'cpp',
-    h: 'c',
-    hpp: 'cpp',
-    java: 'java',
-    go: 'go',
-    rb: 'ruby',
-    php: 'php',
-    swift: 'swift',
-    kt: 'kotlin',
-    dart: 'dart',
-    lua: 'lua',
-    r: 'r',
-    ini: 'ini',
-    cfg: 'ini',
-    conf: 'ini',
-    gitignore: 'gitignore',
-    env: 'ini',
-    txt: 'text',
-  }
-  return map[ext] ?? 'text'
-}
 </script>
 
 <template>

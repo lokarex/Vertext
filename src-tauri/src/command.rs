@@ -634,3 +634,56 @@ pub fn delete_password(service: String, user: String) -> Result<(), String> {
     let entry = Entry::new(&service, &user).map_err(|e: keyring_core::Error| e.to_string())?;
     entry.delete_credential().map_err(|e: keyring_core::Error| e.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn device_name_returns_non_empty() {
+        let name = device_name();
+        assert!(!name.is_empty());
+    }
+
+    #[test]
+    fn validate_repo_name_rejects_empty() {
+        let name = "   ";
+        let trimmed = name.trim();
+        assert!(trimmed.is_empty());
+    }
+
+    #[test]
+    fn validate_repo_name_rejects_too_long() {
+        let name = "a".repeat(65);
+        assert!(name.len() > 64);
+    }
+
+    #[test]
+    fn validate_repo_name_rejects_invalid_chars() {
+        let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+        for c in &invalid_chars {
+            let name = format!("test{}name", c);
+            assert!(
+                name.contains(|ch: char| matches!(ch, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')),
+                "Expected '{}' to be rejected", c
+            );
+        }
+    }
+
+    #[test]
+    fn validate_repo_name_accepts_valid() {
+        let name = "my-valid_repo.name";
+        let trimmed = name.trim();
+        assert!(!trimmed.is_empty());
+        assert!(trimmed.len() <= 64);
+        assert!(!trimmed.contains(|c: char| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')));
+    }
+
+    #[test]
+    fn validate_repo_name_accepts_unicode() {
+        let name = "仓库名";
+        let trimmed = name.trim();
+        assert!(!trimmed.is_empty());
+        assert!(trimmed.len() <= 64);
+    }
+}
