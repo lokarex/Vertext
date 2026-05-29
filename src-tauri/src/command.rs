@@ -35,7 +35,7 @@ pub fn init_repos_dir(app: &tauri::App) {
         "Repos dir: {:?}",
         REPOS_DIR.get().expect("failed to get repos dir")
     );
-    std::fs::create_dir_all(&REPOS_DIR.get().expect("failed to get repos dir"))
+    std::fs::create_dir_all(REPOS_DIR.get().expect("failed to get repos dir"))
         .expect("failed to create repos dir");
     trace!("Repos dir initialized successfully.");
 }
@@ -115,7 +115,11 @@ pub fn clone_remote_repository(
         let pass = pass.clone();
         callbacks.credentials(move |_url, _username, _allowed| {
             git2::Cred::userpass_plaintext(&user, &pass).map_err(|e| {
-                git2::Error::new(git2::ErrorCode::Auth, git2::ErrorClass::Callback, &e.to_string())
+                git2::Error::new(
+                    git2::ErrorCode::Auth,
+                    git2::ErrorClass::Callback,
+                    e.to_string(),
+                )
             })
         });
     }
@@ -275,8 +279,11 @@ pub fn rename_repository(old_name: String, new_name: String) -> Result<(), Strin
         error!("New repository name too long: {} characters", trimmed.len());
         return Err("Name too long (max 64 characters)".to_string());
     }
-    if trimmed.contains(|c: char| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')) {
-        error!("New repository name contains invalid characters: {}", trimmed);
+    if trimmed.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
+        error!(
+            "New repository name contains invalid characters: {}",
+            trimmed
+        );
         return Err("Name contains invalid characters".to_string());
     }
 
@@ -294,7 +301,10 @@ pub fn rename_repository(old_name: String, new_name: String) -> Result<(), Strin
     }
 
     std::fs::rename(&old_path, &new_path).map_err(|e| {
-        error!("Failed to rename directory {:?} to {:?}: {}", old_path, new_path, e);
+        error!(
+            "Failed to rename directory {:?} to {:?}: {}",
+            old_path, new_path, e
+        );
         e.to_string()
     })?;
     trace!("Renamed directory {:?} to {:?}", old_path, new_path);
@@ -302,20 +312,35 @@ pub fn rename_repository(old_name: String, new_name: String) -> Result<(), Strin
     let entry = Entry::new("vertext", &old_name).map_err(|e: keyring_core::Error| e.to_string())?;
     match entry.get_password() {
         Ok(password) => {
-            let new_entry = Entry::new("vertext", trimmed).map_err(|e: keyring_core::Error| e.to_string())?;
-            new_entry.set_password(&password).map_err(|e: keyring_core::Error| {
-                error!("Failed to set password for new name '{}': {}", trimmed, e);
-                std::fs::rename(&new_path, &old_path).ok();
-                e.to_string()
-            })?;
-            entry.delete_credential().map_err(|e: keyring_core::Error| {
-                error!("Failed to delete old keychain entry for '{}': {}", old_name, e);
-                e.to_string()
-            })?;
-            trace!("Migrated keychain credentials from '{}' to '{}'", old_name, trimmed);
+            let new_entry =
+                Entry::new("vertext", trimmed).map_err(|e: keyring_core::Error| e.to_string())?;
+            new_entry
+                .set_password(&password)
+                .map_err(|e: keyring_core::Error| {
+                    error!("Failed to set password for new name '{}': {}", trimmed, e);
+                    std::fs::rename(&new_path, &old_path).ok();
+                    e.to_string()
+                })?;
+            entry
+                .delete_credential()
+                .map_err(|e: keyring_core::Error| {
+                    error!(
+                        "Failed to delete old keychain entry for '{}': {}",
+                        old_name, e
+                    );
+                    e.to_string()
+                })?;
+            trace!(
+                "Migrated keychain credentials from '{}' to '{}'",
+                old_name,
+                trimmed
+            );
         }
         Err(keyring_core::Error::NoEntry) => {
-            trace!("No keychain credentials found for '{}', skipping migration", old_name);
+            trace!(
+                "No keychain credentials found for '{}', skipping migration",
+                old_name
+            );
         }
         Err(e) => {
             error!("Failed to access keychain for '{}': {}", old_name, e);
@@ -324,7 +349,11 @@ pub fn rename_repository(old_name: String, new_name: String) -> Result<(), Strin
         }
     }
 
-    trace!("Repository '{}' renamed to '{}' successfully", old_name, trimmed);
+    trace!(
+        "Repository '{}' renamed to '{}' successfully",
+        old_name,
+        trimmed
+    );
     Ok(())
 }
 
@@ -620,7 +649,9 @@ pub fn get_password(service: String, user: String) -> Result<Option<String>, Str
 #[tauri::command]
 pub fn set_password(service: String, user: String, password: String) -> Result<(), String> {
     let entry = Entry::new(&service, &user).map_err(|e: keyring_core::Error| e.to_string())?;
-    entry.set_password(&password).map_err(|e: keyring_core::Error| e.to_string())
+    entry
+        .set_password(&password)
+        .map_err(|e: keyring_core::Error| e.to_string())
 }
 
 /// Deletes a credential from the OS-level keyring.
@@ -632,7 +663,9 @@ pub fn set_password(service: String, user: String, password: String) -> Result<(
 #[tauri::command]
 pub fn delete_password(service: String, user: String) -> Result<(), String> {
     let entry = Entry::new(&service, &user).map_err(|e: keyring_core::Error| e.to_string())?;
-    entry.delete_credential().map_err(|e: keyring_core::Error| e.to_string())
+    entry
+        .delete_credential()
+        .map_err(|e: keyring_core::Error| e.to_string())
 }
 
 #[cfg(test)]
@@ -664,8 +697,9 @@ mod tests {
         for c in &invalid_chars {
             let name = format!("test{}name", c);
             assert!(
-                name.contains(|ch: char| matches!(ch, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')),
-                "Expected '{}' to be rejected", c
+                name.contains(invalid_chars),
+                "Expected '{}' to be rejected",
+                c
             );
         }
     }
@@ -676,7 +710,7 @@ mod tests {
         let trimmed = name.trim();
         assert!(!trimmed.is_empty());
         assert!(trimmed.len() <= 64);
-        assert!(!trimmed.contains(|c: char| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')));
+        assert!(!trimmed.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']));
     }
 
     #[test]

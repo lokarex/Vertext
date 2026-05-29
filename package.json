@@ -11,7 +11,9 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:all": "vitest run && cargo test --manifest-path src-tauri/Cargo.toml"
+    "test:ci": "npm run test:ci:frontend && npm run test:ci:backend",
+    "test:ci:frontend": "vue-tsc --noEmit && npm audit --audit-level=high && vitest run",
+    "test:ci:backend": "cargo fmt --check --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --verbose"
   },
   "dependencies": {
     "@milkdown/kit": "^7.20.0",
@@ -29,6 +31,7 @@
   "devDependencies": {
     "@pinia/testing": "^1.0.3",
     "@tauri-apps/cli": "^2",
+    "@types/node": "^22",
     "@vicons/fluent": "^0.13.0",
     "@vicons/ionicons5": "^0.13.0",
     "@vitejs/plugin-vue": "^5.2.1",

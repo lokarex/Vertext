@@ -274,7 +274,7 @@ impl Repository {
                 git2::Error::new(
                     git2::ErrorCode::Auth,
                     git2::ErrorClass::Callback,
-                    &e.to_string(),
+                    e.to_string(),
                 )
             })
         });
@@ -490,7 +490,7 @@ impl Repository {
                 git2::Error::new(
                     git2::ErrorCode::Auth,
                     git2::ErrorClass::Callback,
-                    &e.to_string(),
+                    e.to_string(),
                 )
             })
         });
