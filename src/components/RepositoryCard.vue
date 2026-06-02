@@ -8,8 +8,11 @@ import { NCard, NIcon, NButton, NModal, NInput, NSpace, NAlert, NProgress, NTime
 import { useI18n } from 'vue-i18n';
 import { Folder24Regular, ChevronRight16Regular, ArrowSync20Regular, Settings20Regular, Delete20Regular, History20Regular, ArrowUndo20Regular, Rename20Regular } from '@vicons/fluent';
 import { useRepositoriesStore } from '@/stores/repositories';
+import { useSettingsStore } from '@/stores/settings';
 import type { Repository } from '@/models/Repository';
 import type { CommitInfo } from '@/models/CommitInfo';
+import type { CommitSuggestion } from '@/models/AiConfig';
+import AiCommitDialog from '@/components/AiCommitDialog.vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { useErrorHandler } from '@/composables/useErrorHandler';
@@ -86,6 +89,17 @@ const historyLoading = ref(false);
 /** Target commit OID for the restore confirmation flow */
 const restoreTargetOid = ref<string | null>(null);
 
+/** AI dialog state */
+const showAiDialog = ref(false);
+const aiDialogLoading = ref(false);
+const aiDialogError = ref<string | null>(null);
+const aiSuggestion = ref<CommitSuggestion | null>(null);
+const aiProviderName = computed(() => useSettingsStore().aiProvider ?? '');
+
+const onAiSubmit = ref<((message: string) => void) | null>(null);
+const onAiCancel = ref<(() => void) | null>(null);
+const onAiRegenerate = ref<(() => void) | null>(null);
+
 /** Toggles the expanded state of the actions panel */
 const handleToggleExpand = () => {
     isExpanded.value = !isExpanded.value;
@@ -102,8 +116,9 @@ const handleDelete = async () => {
 };
 
 /**
- * Initiates a git sync (commit + pull + push) for this repository.
- * Listens to `sync-progress` events to update the progress bar and status text.
+ * Initiates a sync with optional AI commit message generation.
+ * If AI is configured, shows a dialog for commit message preview/editing.
+ * Otherwise falls back to the default "Auto-sync commit" behavior.
  */
 const handleSync = async () => {
     if (isSyncing.value) return;
@@ -122,31 +137,20 @@ const handleSync = async () => {
     syncStep.value = t('repository.message.syncChecking');
     syncError.value = '';
 
-    let unlisten: (() => void) | null = null;
-    try {
-        unlisten = await listen<{ step: string; message: string }>('sync-progress', (event) => {
+    const unlistenRef = ref<(() => void) | null>(null);
+
+    const listenForProgress = async () => {
+        unlistenRef.value = await listen<{ step: string; message: string }>('sync-progress', (event) => {
             const { step, message: payloadMessage } = event.payload;
             syncStep.value = payloadMessage;
 
             switch (step) {
-                case 'checking':
-                    syncProgress.value = 10;
-                    break;
-                case 'committing':
-                    syncProgress.value = 30;
-                    break;
-                case 'fetching':
-                    syncProgress.value = 50;
-                    break;
-                case 'merging':
-                    syncProgress.value = 70;
-                    break;
-                case 'pushing':
-                    syncProgress.value = 90;
-                    break;
-                case 'done':
-                    syncProgress.value = 100;
-                    break;
+                case 'checking': syncProgress.value = 10; break;
+                case 'committing': syncProgress.value = 30; break;
+                case 'fetching': syncProgress.value = 50; break;
+                case 'merging': syncProgress.value = 70; break;
+                case 'pushing': syncProgress.value = 90; break;
+                case 'done': syncProgress.value = 100; break;
             }
 
             if (step === 'done') {
@@ -158,17 +162,64 @@ const handleSync = async () => {
                 }, 500);
             }
         });
+    };
 
-        await repositoriesStore.syncRepository(repo.name);
-    }
-    catch (err) {
-        syncError.value = String(err);
+    const cleanup = () => {
+        unlistenRef.value?.();
         isSyncing.value = false;
         syncProgress.value = 0;
-        handleError('repository.message.syncFailed', err);
-    }
-    finally {
-        unlisten?.();
+    };
+
+    try {
+        const suggestion = await repositoriesStore.prepareCommitMessage(repo.name);
+
+        if (suggestion === null) {
+            await listenForProgress();
+            await repositoriesStore.syncRepository(repo.name);
+            return;
+        }
+
+        aiSuggestion.value = suggestion;
+        aiDialogLoading.value = false;
+        aiDialogError.value = null;
+        showAiDialog.value = true;
+
+        await new Promise<void>((resolve, reject) => {
+            onAiSubmit.value = async (message: string) => {
+                showAiDialog.value = false;
+                try {
+                    await listenForProgress();
+                    await repositoriesStore.finishSync(repo.name, message);
+                    resolve();
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            onAiCancel.value = () => {
+                showAiDialog.value = false;
+                reject(new Error('User cancelled'));
+            };
+            onAiRegenerate.value = async () => {
+                aiDialogLoading.value = true;
+                aiDialogError.value = null;
+                try {
+                    const newSuggestion = await repositoriesStore.prepareCommitMessage(repo.name);
+                    aiSuggestion.value = newSuggestion;
+                    aiDialogLoading.value = false;
+                } catch (err) {
+                    aiDialogError.value = String(err);
+                    aiDialogLoading.value = false;
+                }
+            };
+        });
+    } catch (err) {
+        if (String(err) !== 'Error: User cancelled') {
+            syncError.value = String(err);
+            handleError('repository.message.syncFailed', err);
+        }
+        cleanup();
+    } finally {
+        unlistenRef.value?.();
     }
 };
 
@@ -458,6 +509,17 @@ const statusColor = computed(() => {
                 </NSpace>
             </template>
         </NModal>
+
+        <AiCommitDialog
+            :visible="showAiDialog"
+            :loading="aiDialogLoading"
+            :error-message="aiDialogError"
+            :suggestion="aiSuggestion"
+            :provider-name="aiProviderName"
+            @submit="(msg) => onAiSubmit?.(msg)"
+            @regenerate="() => onAiRegenerate?.()"
+            @cancel="() => onAiCancel?.()"
+        />
     </div>
 </template>
 

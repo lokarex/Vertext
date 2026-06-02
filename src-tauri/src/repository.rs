@@ -87,6 +87,10 @@ impl Repository {
         Ok(repo)
     }
 
+    pub fn inner(&self) -> &git2::Repository {
+        &self.inner
+    }
+
     /// Ensures a local branch exists and is checked out.
     ///
     /// If the branch already exists, `HEAD` is switched to it.
@@ -179,7 +183,7 @@ impl Repository {
     /// Stages and commits all changes in the working tree.
     ///
     /// Adds all files (including untracked ones) to the index,
-    /// then creates a commit with the message `"Auto-sync commit"`.
+    /// then creates a commit with the given message.
     /// If the branch is unborn (no commits yet), an initial commit
     /// with no parents is created.
     ///
@@ -187,7 +191,7 @@ impl Repository {
     ///
     /// Returns an error if staging, tree building, or committing
     /// fails.
-    pub fn commit_all(&self) -> Result<(), String> {
+    pub fn commit_all(&self, message: &str) -> Result<(), String> {
         trace!("Committing all changes...");
         let mut index = self.inner.index().map_err(|e| e.to_string())?;
         index
@@ -208,26 +212,19 @@ impl Repository {
                         .find_commit(parent_oid)
                         .map_err(|e| e.to_string())?;
                     self.inner
-                        .commit(
-                            Some("HEAD"),
-                            &sig,
-                            &sig,
-                            "Auto-sync commit",
-                            &tree,
-                            &[&parent],
-                        )
+                        .commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
                         .map_err(|e| e.to_string())?;
                 }
                 None => {
                     trace!("Unborn branch, creating initial commit");
                     self.inner
-                        .commit(Some("HEAD"), &sig, &sig, "Auto-sync commit", &tree, &[])
+                        .commit(Some("HEAD"), &sig, &sig, message, &tree, &[])
                         .map_err(|e| e.to_string())?;
                 }
             },
             Err(_) => {
                 self.inner
-                    .commit(Some("HEAD"), &sig, &sig, "Auto-sync commit", &tree, &[])
+                    .commit(Some("HEAD"), &sig, &sig, message, &tree, &[])
                     .map_err(|e| e.to_string())?;
             }
         }
@@ -793,7 +790,7 @@ mod tests {
         let (dir, repo) = init_test_repo();
         fs::write(dir.path().join("new.md"), "new").unwrap();
         let initial_head = repo.head_oid().unwrap();
-        repo.commit_all().unwrap();
+        repo.commit_all("test commit").unwrap();
         let new_head = repo.head_oid().unwrap();
         assert_ne!(new_head, initial_head);
     }
@@ -841,7 +838,7 @@ mod tests {
     fn restore_to_creates_restore_commit() {
         let (dir, repo) = init_test_repo();
         fs::write(dir.path().join("second.md"), "second").unwrap();
-        repo.commit_all().unwrap();
+        repo.commit_all("second commit").unwrap();
         let commits = repo.history().unwrap();
         let first_oid_str = &commits.last().unwrap().full_oid;
         let first_oid = git2::Oid::from_str(first_oid_str).unwrap();

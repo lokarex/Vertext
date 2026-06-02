@@ -11,6 +11,8 @@ import { ref } from "vue";
 import { invoke } from '@tauri-apps/api/core';
 import { debug, error, trace } from '@tauri-apps/plugin-log';
 import type { Repository, RepositoryStatus } from '@/models/Repository';
+import type { CommitSuggestion } from '@/models/AiConfig';
+import { useSettingsStore } from '@/stores/settings';
 
 /**
  * Retrieves a password from the OS keychain for the given user/service.
@@ -83,6 +85,67 @@ export const useRepositoriesStore = defineStore('repositories', () => {
     }
 
     initialize();
+
+    /**
+     * Generates an AI commit message suggestion for a repository.
+     * Returns null if AI is not configured in settings.
+     *
+     * @param repoName - The repository to generate a message for.
+     * @returns The commit suggestion or null if AI is disabled.
+     */
+    async function prepareCommitMessage(repoName: string): Promise<CommitSuggestion | null> {
+        const settings = useSettingsStore();
+        if (!settings.isAiConfigured) {
+            return null;
+        }
+        const repo = repositories.value.find(r => r.name === repoName);
+        if (!repo || !repo.remoteUrl || !repo.userName) {
+            return null;
+        }
+        const password = await getPassword(repoName);
+        if (!password) {
+            return null;
+        }
+        const suggestion = await invoke<CommitSuggestion>('prepare_commit_message', {
+            repoName,
+            remoteUrl: repo.remoteUrl,
+            userName: repo.userName,
+            password,
+            aiProvider: settings.aiProvider,
+            aiModel: settings.aiModel,
+            aiEndpoint: settings.aiOllamaEndpoint || null,
+        });
+        return suggestion;
+    }
+
+    /**
+     * Completes the sync workflow with a user-confirmed commit message.
+     *
+     * @param repoName - The repository to sync.
+     * @param commitMessage - The commit message to use.
+     * @throws {Error} If the repository is not configured or sync fails.
+     */
+    async function finishSync(repoName: string, commitMessage: string): Promise<void> {
+        const repo = repositories.value.find(r => r.name === repoName);
+        if (!repo || !repo.remoteUrl || !repo.userName) {
+            throw new Error('Repository is not configured for sync');
+        }
+        const password = await getPassword(repoName);
+        if (!password) {
+            throw new Error('Repository is not configured for sync');
+        }
+        await invoke('finish_sync', {
+            repoName,
+            remoteUrl: repo.remoteUrl,
+            userName: repo.userName,
+            password,
+            commitMessage,
+        });
+        repo.status = 'synced';
+        await store?.set('repositories', repositories.value);
+        await store?.save();
+        trace(`Sync completed for repository: ${repoName}`);
+    }
 
     /**
      * Creates a new local (non-remote) Git repository.
@@ -296,5 +359,7 @@ export const useRepositoriesStore = defineStore('repositories', () => {
         setStatus,
         selectRepository,
         renameRepository,
+        prepareCommitMessage,
+        finishSync,
     };
 })

@@ -1,78 +1,117 @@
 <script lang="ts" setup>
 /**
- * Settings page for configuring theme, language, font size, and auto-save interval.
- * All settings are persisted through the settings store and applied globally.
+ * Settings page for configuring theme, language, font size, auto-save interval,
+ * and AI assistant settings. All settings are persisted through the settings store.
  */
 import { useSettingsStore, Theme } from '@/stores/settings';
-import { NSelect, SelectOption, NInputNumber, NCard, NDivider, NScrollbar } from 'naive-ui';
+import { NSelect, SelectOption, NInputNumber, NCard, NDivider, NScrollbar, NInput } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
+import type { AiProviderType } from '@/models/AiConfig';
 
 const { t } = useI18n();
 
-/** Reactive reference to the application settings store. */
 const settingsStore = useSettingsStore();
 
-/** Theme selection options (dark/light). */
 const themeOptions = computed(() => [
-    {
-        value: 'darkTheme',
-        label: t('theme.label.dark'),
-    },
-    {
-        value: 'lightTheme',
-        label: t('theme.label.light'),
-    },
+    { value: 'darkTheme', label: t('theme.label.dark') },
+    { value: 'lightTheme', label: t('theme.label.light') },
 ]);
 
-/**
- * Handles theme selection changes.
- * @param value - The selected theme value key.
- * @param _options - Unused select option metadata.
- */
 function handleThemeChange(value: string, _options: SelectOption) {
     settingsStore.setTheme(value as Theme);
 }
 
-/**
- * Handles font size changes with validation.
- * @param value - The new font size in pixels, or null if cleared.
- */
 function handleFontSizeChange(value: number | null) {
-    if (value !== null) {
-        settingsStore.setFontSize(value)
-    }
+    if (value !== null) { settingsStore.setFontSize(value) }
 }
 
-/** Language selection options (English, Simplified Chinese). */
 const languageOptions = computed(() => [
-    {
-        value: 'en',
-        label: t('language.label.en'),
-    },
-    {
-        value: 'zh-CN',
-        label: t('language.label.zh_CN'),
-    },
+    { value: 'en', label: t('language.label.en') },
+    { value: 'zh-CN', label: t('language.label.zh_CN') },
 ]);
 
-/**
- * Handles language selection changes.
- * @param value - The selected locale code ('en' or 'zh-CN').
- * @param _options - Unused select option metadata.
- */
 function handleLanguageChange(value: "en" | "zh-CN", _options: SelectOption) {
     settingsStore.setLanguage(value);
 }
 
-/**
- * Handles auto-save interval changes with validation.
- * @param value - The new interval in seconds, or null if cleared.
- */
 function handleAutoSaveIntervalChange(value: number | null) {
-    if (value !== null) {
-        settingsStore.setAutoSaveInterval(value)
+    if (value !== null) { settingsStore.setAutoSaveInterval(value) }
+}
+
+const apiKeyInput = ref('');
+const apiKeyLoaded = ref(false);
+
+const providerOptions = computed(() => [
+    { value: '__none__', label: t('settings.label.aiProviderNone') },
+    { value: 'openai', label: 'OpenAI' },
+    { value: 'anthropic', label: 'Anthropic' },
+    { value: 'deepseek', label: 'DeepSeek' },
+    { value: 'ollama', label: 'Ollama' },
+]);
+
+const modelOptions = computed(() => {
+    switch (settingsStore.aiProvider) {
+        case 'openai':
+            return [
+                { value: 'gpt-4.1', label: 'GPT-4.1' },
+                { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
+                { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+            ];
+        case 'anthropic':
+            return [
+                { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+                { value: 'claude-haiku-3-5-20241022', label: 'Claude Haiku 3.5' },
+            ];
+        case 'deepseek':
+            return [
+                { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+                { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
+            ];
+        default:
+            return [];
     }
+});
+
+watch(() => settingsStore.aiProvider, async (val) => {
+    if (!val) {
+        apiKeyInput.value = '';
+        apiKeyLoaded.value = false;
+        return;
+    }
+    try {
+        const key = await settingsStore.getAiApiKey();
+        apiKeyInput.value = key ? '••••••••' : '';
+        apiKeyLoaded.value = true;
+    } catch {
+        apiKeyInput.value = '';
+        apiKeyLoaded.value = false;
+    }
+}, { immediate: true });
+
+function handleAiProviderChange(value: string | null) {
+    if (value === '__none__' || value === null) {
+        settingsStore.setAiProvider(null);
+    } else {
+        settingsStore.setAiProvider(value as AiProviderType);
+    }
+    apiKeyLoaded.value = false;
+    apiKeyInput.value = '';
+}
+
+function handleAiModelChange(value: string) {
+    settingsStore.setAiModel(value);
+}
+
+function handleAiEndpointChange(value: string) {
+    settingsStore.setAiOllamaEndpoint(value);
+}
+
+async function handleApiKeyChange(value: string) {
+    if (!settingsStore.aiProvider) return;
+    if (!value || value === '••••••••') return;
+    await settingsStore.setAiApiKey(value);
+    apiKeyInput.value = '••••••••';
 }
 </script>
 
@@ -80,7 +119,7 @@ function handleAutoSaveIntervalChange(value: number | null) {
     <n-scrollbar>
       <n-card class="settings-card">
         <label class="settings-title">{{ $t('settings.title') }}</label>
-        
+
         <div>
             <label class="settings-section-title">{{ $t('settings.label.appearance') }}</label>
 
@@ -110,6 +149,63 @@ function handleAutoSaveIntervalChange(value: number | null) {
             <div class="settings-item">
                 <label class="settings-item-title">{{ $t('settings.label.autoSaveInterval') }}</label>
                 <n-input-number v-model:value="settingsStore.autoSaveInterval" size="small" @update:value="handleAutoSaveIntervalChange" :min="1" :max="120"/>
+            </div>
+
+            <n-divider/>
+
+            <label class="settings-section-title">{{ $t('settings.label.ai') }}</label>
+
+            <div class="settings-item">
+                <label class="settings-item-title">{{ $t('settings.label.aiProvider') }}</label>
+                <n-select
+                    :value="settingsStore.aiProvider"
+                    :options="providerOptions"
+                    clearable
+                    @update:value="handleAiProviderChange"
+                />
+            </div>
+
+            <n-divider/>
+
+            <div class="settings-item">
+                <label class="settings-item-title">{{ $t('settings.label.aiModel') }}</label>
+                <n-select
+                    v-if="settingsStore.aiProvider !== 'ollama'"
+                    :value="settingsStore.aiModel"
+                    :options="modelOptions"
+                    @update:value="handleAiModelChange"
+                />
+                <n-input
+                    v-else
+                    :value="settingsStore.aiModel"
+                    :placeholder="$t('settings.label.aiModelPlaceholder')"
+                    @update:value="handleAiModelChange"
+                />
+            </div>
+
+            <n-divider/>
+
+            <div class="settings-item">
+                <label class="settings-item-title">{{ $t('settings.label.aiApiKey') }}</label>
+                <n-input
+                    v-model:value="apiKeyInput"
+                    type="password"
+                    show-password-on="click"
+                    :placeholder="$t('settings.label.aiApiKeyPlaceholder')"
+                    :disabled="!settingsStore.aiProvider"
+                    @update:value="handleApiKeyChange"
+                />
+            </div>
+
+            <n-divider v-if="settingsStore.aiProvider === 'ollama'"/>
+
+            <div v-if="settingsStore.aiProvider === 'ollama'" class="settings-item">
+                <label class="settings-item-title">{{ $t('settings.label.aiEndpoint') }}</label>
+                <n-input
+                    :value="settingsStore.aiOllamaEndpoint"
+                    placeholder="http://localhost:11434"
+                    @update:value="handleAiEndpointChange"
+                />
             </div>
 
         </div>
@@ -158,6 +254,11 @@ function handleAutoSaveIntervalChange(value: number | null) {
 
 .settings-item :deep(.n-input-number) {
     width: 150px;
+    justify-self: end;
+}
+
+.settings-item :deep(.n-input) {
+    width: 250px;
     justify-self: end;
 }
 </style>

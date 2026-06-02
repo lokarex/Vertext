@@ -2,6 +2,7 @@ use log::{error, trace};
 use std::{path::PathBuf, sync::OnceLock};
 use tauri::{Emitter, Manager};
 
+use crate::ai::{self, AiConfig, AiProviderType, CommitSuggestion};
 use crate::fs::{read_dir_recursive, FileEntry};
 use crate::repository::{CommitInfo, Repository};
 use keyring_core::Entry;
@@ -200,7 +201,7 @@ pub fn sync_repository(
     // Step 2: committing
     emit("committing", "Committing local changes...");
     if repo.has_uncommitted_changes()? {
-        repo.commit_all()?;
+        repo.commit_all("Auto-sync commit")?;
         trace!("Uncommitted changes committed");
     } else {
         trace!("No uncommitted changes");
@@ -232,6 +233,146 @@ pub fn sync_repository(
     }
 
     // Step 5: pushing
+    emit("pushing", "Pushing all branches...");
+    repo.push_all_branches()?;
+
+    emit("done", "Sync completed");
+    trace!("Sync completed for repository: {}", repo_name);
+    Ok(())
+}
+
+/// Generates an AI-powered commit message suggestion from uncommitted changes.
+///
+/// Opens the repository, generates a diff, calls the configured LLM provider,
+/// and returns a [`CommitSuggestion`] with the proposed message and file list.
+///
+/// # Errors
+///
+/// Returns an error if the repository cannot be opened, no uncommitted
+/// changes exist, the API key is missing, or the LLM call fails.
+#[tauri::command]
+pub async fn prepare_commit_message(
+    repo_name: String,
+    remote_url: String,
+    user_name: String,
+    password: String,
+    ai_provider: String,
+    ai_model: String,
+    ai_endpoint: Option<String>,
+) -> Result<CommitSuggestion, String> {
+    trace!("Preparing AI commit message for repository: {}", repo_name);
+    let device_name = device_name();
+    let path = repos_dir().join(&repo_name);
+    let repo = Repository::open_with_remote(&path, &remote_url, &user_name, &password)
+        .map_err(|e| format!("Failed to open repository: {}", e))?;
+
+    repo.setup_remote()?;
+    repo.ensure_branch(&device_name)?;
+
+    if !repo.has_uncommitted_changes()? {
+        return Err("No uncommitted changes".to_string());
+    }
+
+    let diff = ai::diff::generate_diff(repo.inner())?;
+    let files_changed = ai::diff::parse_file_changes(repo.inner())?;
+
+    let provider_type: AiProviderType = serde_json::from_value(serde_json::json!(ai_provider))
+        .map_err(|e| format!("Invalid provider: {}", e))?;
+
+    let api_key = match keyring_core::Entry::new("vertext-ai", &ai_provider) {
+        Ok(entry) => entry.get_password().map_err(|e| e.to_string())?,
+        Err(e) => return Err(format!("Failed to access keyring: {}", e)),
+    };
+
+    let config = AiConfig {
+        provider: provider_type,
+        model: ai_model,
+        api_key,
+        endpoint: ai_endpoint,
+    };
+
+    let provider = ai::create_provider(&config.provider);
+    let message = provider
+        .generate_commit_message(&diff, &config)
+        .await
+        .map_err(|e| {
+            if e.starts_with("ai.error.") {
+                e
+            } else {
+                format!("ai.error.serviceError: {}", e)
+            }
+        })?;
+
+    trace!(
+        "AI commit message generated: {}",
+        &message[..message.len().min(80)]
+    );
+
+    Ok(CommitSuggestion {
+        message,
+        files_changed,
+    })
+}
+
+/// Completes the sync workflow after the user confirms the commit message.
+///
+/// Commits with the given message, then fetches, merges, and pushes.
+/// Progress events are emitted via `sync-progress`.
+///
+/// # Errors
+///
+/// Returns an error if any step fails: opening the repository,
+/// committing, fetching, merging, or pushing.
+#[tauri::command]
+pub fn finish_sync(
+    app_handle: tauri::AppHandle,
+    repo_name: String,
+    remote_url: String,
+    user_name: String,
+    password: String,
+    commit_message: String,
+) -> Result<(), String> {
+    trace!("Finishing sync for repository: {}", repo_name);
+    let device_name = device_name();
+
+    let emit = |step: &str, message: &str| {
+        let _ = app_handle.emit(
+            "sync-progress",
+            serde_json::json!({
+                "step": step,
+                "message": message,
+                "repo_name": repo_name,
+            }),
+        );
+    };
+
+    emit("committing", "Committing local changes...");
+    let path = repos_dir().join(&repo_name);
+    let repo = Repository::open_with_remote(&path, &remote_url, &user_name, &password)
+        .map_err(|e| format!("Failed to open repository: {}", e))?;
+
+    repo.setup_remote()?;
+    repo.ensure_branch(&device_name)?;
+    repo.commit_all(&commit_message)?;
+
+    emit("fetching", "Fetching remote branches...");
+    repo.fetch_all_branches()?;
+
+    emit("merging", "Finding latest commit...");
+    let (latest_oid, latest_ref_name) = repo.latest_commit()?;
+    let head_oid = repo.head_oid()?;
+
+    if head_oid != latest_oid {
+        trace!(
+            "Latest commit {} is on ref '{}', not on current branch (head {}), merging...",
+            latest_oid,
+            latest_ref_name,
+            head_oid
+        );
+        emit("merging", "Merging latest commit...");
+        repo.merge_theirs(latest_oid)?;
+    }
+
     emit("pushing", "Pushing all branches...");
     repo.push_all_branches()?;
 

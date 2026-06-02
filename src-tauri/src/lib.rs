@@ -5,6 +5,8 @@
 //! automatic version history, multi-device synchronization via a
 //! device-branch strategy, and credential storage in the OS keyring.
 
+/// AI-powered commit message generation.
+pub mod ai;
 /// Tauri command handlers exposed to the frontend.
 pub mod command;
 /// Filesystem traversal utilities for repository tree display.
@@ -74,6 +76,8 @@ pub fn run() {
             command::delete_entry,
             command::read_file_content,
             command::write_file_content,
+            command::prepare_commit_message,
+            command::finish_sync,
             command::get_password,
             command::set_password,
             command::delete_password

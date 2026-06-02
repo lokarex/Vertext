@@ -51,6 +51,14 @@ A application that treats each personal workspace as a **Git repository**, givin
 ### Security
 - Repository credentials (password) stored in the **OS-level keyring**
 
+### AI-Powered Commit Messages
+- **Multi-provider**: OpenAI (GPT-4.1 / GPT-4.1 Mini), Anthropic (Claude Sonnet 4 / Haiku 3.5), DeepSeek (V4 Flash / V4 Pro), and Ollama (local)
+- Automatically analyzes `git diff` to generate meaningful, conventional-format commit messages
+- Smart diff sampling for large changesets (prioritizes meaningful hunks)
+- Preview & edit the generated message before committing — or regenerate for a new suggestion
+- **API keys** stored in OS-level keyring, never written to disk
+- Fully optional — falls back to default message when no AI provider is configured
+
 ---
 
 ## How Sync Works — The Device-Branch Strategy
@@ -76,7 +84,7 @@ Vertext takes a unique approach to multi-device synchronization. Instead of havi
 
 **Sync process on each device:**
 
-1. **Commit** — auto-commit any uncommitted local changes
+1. **AI Commit** — when AI is configured, analyzes uncommitted changes and generates a meaningful commit message for review before submitting; otherwise, auto-commits with a default message
 2. **Fetch** — pull all remote branches
 3. **Find Latest** — scan every branch and remote tracking ref to find the most recent commit
 4. **Merge** — fast-forward if possible; otherwise, create a merge commit using the theirs strategy (favors the remote latest)
@@ -130,6 +138,7 @@ npm run tauri build
 | **Backend (Rust)** | [git2](https://docs.rs/git2/latest/git2/) (libgit2 bindings) |
 | **Credential Storage** | [keyring](https://docs.rs/keyring/latest/keyring/) (OS-native) |
 | **Logging** | [fern](https://docs.rs/fern/latest/fern/) + [tauri-plugin-log](https://v2.tauri.app/plugin/logging/) |
+| **AI / HTTP** | [reqwest](https://docs.rs/reqwest/) + [async-trait](https://docs.rs/async-trait/) + [tokio](https://tokio.rs/) |
 
 ---
 
