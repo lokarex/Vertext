@@ -55,6 +55,7 @@ function handleRegenerate() {
 
 <template>
     <n-modal
+        preset="card"
         :show="visible"
         :mask-closable="false"
         :title="$t('ai.label.dialogTitle')"
