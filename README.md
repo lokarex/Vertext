@@ -53,8 +53,9 @@ A application that treats each personal workspace as a **Git repository**, givin
 
 ### AI-Powered Commit Messages
 - **Multi-provider**: OpenAI (GPT-4.1 / GPT-4.1 Mini), Anthropic (Claude Sonnet 4 / Haiku 3.5), DeepSeek (V4 Flash / V4 Pro), and Ollama (local)
-- Automatically analyzes `git diff` to generate meaningful, conventional-format commit messages
-- Smart diff sampling for large changesets (prioritizes meaningful hunks)
+- Automatically analyzes `git diff` to generate concise, natural-language version information without Conventional Commit prefixes
+- Fair, Unicode-aware diff sampling for large changesets, with changed-file summaries and representative hunks across files
+- Generated version information follows the application language setting (English or Simplified Chinese)
 - Preview & edit the generated message before committing — or regenerate for a new suggestion
 - **API keys** stored in OS-level keyring, never written to disk
 - Fully optional — falls back to default message when no AI provider is configured

@@ -114,6 +114,7 @@ export const useRepositoriesStore = defineStore('repositories', () => {
             aiProvider: settings.aiProvider,
             aiModel: settings.aiModel,
             aiEndpoint: settings.aiOllamaEndpoint || null,
+            language: settings.language || 'en',
         });
         return suggestion;
     }

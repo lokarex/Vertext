@@ -2,7 +2,7 @@ use log::{error, trace};
 use std::{path::PathBuf, sync::OnceLock};
 use tauri::{Emitter, Manager};
 
-use crate::ai::{self, AiConfig, AiProviderType, CommitSuggestion};
+use crate::ai::{self, AiConfig, AiProviderType, CommitSuggestion, OutputLanguage};
 use crate::fs::{read_dir_recursive, FileEntry};
 use crate::repository::{CommitInfo, Repository};
 use keyring_core::Entry;
@@ -52,6 +52,10 @@ fn device_name() -> String {
     hostname::get()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|_| "unknown-device".to_string())
+}
+
+fn message_preview(message: &str, max_chars: usize) -> String {
+    message.chars().take(max_chars).collect()
 }
 
 /// Creates a new local Git repository with a device-specific branch.
@@ -250,6 +254,7 @@ pub fn sync_repository(
 ///
 /// Returns an error if the repository cannot be opened, no uncommitted
 /// changes exist, the API key is missing, or the LLM call fails.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn prepare_commit_message(
     repo_name: String,
@@ -259,6 +264,7 @@ pub async fn prepare_commit_message(
     ai_provider: String,
     ai_model: String,
     ai_endpoint: Option<String>,
+    language: OutputLanguage,
 ) -> Result<CommitSuggestion, String> {
     trace!("Preparing AI commit message for repository: {}", repo_name);
     let device_name = device_name();
@@ -273,8 +279,7 @@ pub async fn prepare_commit_message(
         return Err("No uncommitted changes".to_string());
     }
 
-    let diff = ai::diff::generate_diff(repo.inner())?;
-    let files_changed = ai::diff::parse_file_changes(repo.inner())?;
+    let analysis = ai::diff::analyze_changes(repo.inner())?;
 
     let provider_type: AiProviderType = serde_json::from_value(serde_json::json!(ai_provider))
         .map_err(|e| format!("Invalid provider: {}", e))?;
@@ -289,11 +294,12 @@ pub async fn prepare_commit_message(
         model: ai_model,
         api_key,
         endpoint: ai_endpoint,
+        language,
     };
 
     let provider = ai::create_provider(&config.provider);
     let message = provider
-        .generate_commit_message(&diff, &config)
+        .generate_commit_message(&analysis.sampled_diff, &config)
         .await
         .map_err(|e| {
             if e.starts_with("ai.error.") {
@@ -305,12 +311,12 @@ pub async fn prepare_commit_message(
 
     trace!(
         "AI commit message generated: {}",
-        &message[..message.len().min(80)]
+        message_preview(&message, 80)
     );
 
     Ok(CommitSuggestion {
         message,
-        files_changed,
+        files_changed: analysis.files_changed,
     })
 }
 
@@ -817,6 +823,16 @@ mod tests {
     fn device_name_returns_non_empty() {
         let name = device_name();
         assert!(!name.is_empty());
+    }
+
+    #[test]
+    fn message_preview_truncates_multibyte_text_on_character_boundaries() {
+        let message = "中文版本信息".repeat(20);
+
+        let preview = message_preview(&message, 80);
+
+        assert_eq!(preview.chars().count(), 80);
+        assert!(message.starts_with(&preview));
     }
 
     #[test]

@@ -19,15 +19,24 @@ pub enum AiProviderType {
     Ollama,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum OutputLanguage {
+    #[serde(rename = "en")]
+    English,
+    #[serde(rename = "zh-CN")]
+    SimplifiedChinese,
+}
+
 #[derive(Debug, Clone)]
 pub struct AiConfig {
     pub provider: AiProviderType,
     pub model: String,
     pub api_key: String,
     pub endpoint: Option<String>,
+    pub language: OutputLanguage,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct FileChangeSummary {
     pub path: String,

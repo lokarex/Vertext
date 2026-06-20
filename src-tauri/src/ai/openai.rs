@@ -16,12 +16,13 @@ impl LlmProvider for OpenAiProvider {
             _ => "https://api.openai.com/v1/chat/completions".to_string(),
         };
 
-        let system_prompt = prompt::build_system_prompt();
+        let system_prompt = prompt::build_system_prompt(&config.language);
+        let user_prompt = prompt::build_user_prompt(diff);
         let body = serde_json::json!({
             "model": config.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": diff}
+                {"role": "user", "content": user_prompt}
             ],
             "temperature": 0.3,
         });
@@ -86,6 +87,7 @@ mod tests {
             model: "gpt-4o-mini".to_string(),
             api_key: "test-key".to_string(),
             endpoint: None,
+            language: crate::ai::OutputLanguage::English,
         };
         assert_eq!(config.provider, AiProviderType::OpenAI);
         assert_eq!(config.model, "gpt-4o-mini");
@@ -98,6 +100,7 @@ mod tests {
             model: "deepseek-chat".to_string(),
             api_key: "test-key".to_string(),
             endpoint: None,
+            language: crate::ai::OutputLanguage::English,
         };
         assert_eq!(config.provider, AiProviderType::DeepSeek);
     }

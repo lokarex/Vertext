@@ -11,13 +11,14 @@ impl LlmProvider for AnthropicProvider {
         diff: &str,
         config: &AiConfig,
     ) -> Result<String, String> {
-        let system_prompt = prompt::build_system_prompt();
+        let system_prompt = prompt::build_system_prompt(&config.language);
+        let user_prompt = prompt::build_user_prompt(diff);
         let body = serde_json::json!({
             "model": config.model,
             "max_tokens": 1024,
             "system": system_prompt,
             "messages": [
-                {"role": "user", "content": diff}
+                {"role": "user", "content": user_prompt}
             ],
         });
 

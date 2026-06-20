@@ -17,12 +17,13 @@ impl LlmProvider for OllamaProvider {
             .unwrap_or("http://localhost:11434");
         let url = format!("{}/api/chat", endpoint.trim_end_matches('/'));
 
-        let system_prompt = prompt::build_system_prompt();
+        let system_prompt = prompt::build_system_prompt(&config.language);
+        let user_prompt = prompt::build_user_prompt(diff);
         let body = serde_json::json!({
             "model": config.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": diff}
+                {"role": "user", "content": user_prompt}
             ],
             "stream": false,
         });
